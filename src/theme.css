@@ -1,0 +1,137 @@
+:root {
+  color-scheme: light;
+
+  /* Surfaces */
+  --page-bg: #F4F1EC;
+  --sidebar-bg: #EFEAE1;
+  --card-bg: #FFFFFF;
+  --card-bg-raised: #EDEAE1;
+  --input-bg: #F9F8F5;
+  --border-hairline: #DDDCD5;
+  --border-hairline-strong: #CBC9BC;
+
+  /* Ink */
+  --text-primary: #252822;
+  --text-secondary: #6B6E67;
+  --text-muted: #8B8E85;
+  --text-faint: #ACAFA6;
+
+  /* Brand accent (verde-oliva da identidade) — única cor de interação/marca */
+  --accent: #6F7663;
+  --accent-hover: #5B6353;
+  --accent-active: #454A3D;
+  --accent-soft: rgba(111, 118, 99, 0.14);
+
+  /* Categorical (mesma família terrosa, ordem fixa — ver dataviz palette) */
+  --series-blue: #5C7B8A;
+  --series-orange: #C17F3E;
+  --series-aqua: #4F8F82;
+  --series-yellow: #B99A34;
+  --series-magenta: #96678C;
+  --series-green: #6F8F52;
+  --series-violet: #74688F;
+  --series-red: #9C5646;
+
+  /* Status */
+  --status-good: #3F8F5C;
+  --status-warning: #B8862E;
+  --status-serious: #C1703F;
+  --status-critical: #B5533F;
+
+  /* Chart chrome */
+  --grid-hairline: #E6E1D5;
+  --axis-muted: #9A9E8F;
+
+  --radius-lg: 14px;
+  --radius-md: 10px;
+  --radius-sm: 8px;
+
+  --shadow-card: 0 6px 16px -8px rgba(30, 28, 20, 0.12);
+
+  --font-sans: system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+/* Escuro — segue o sistema, a menos que "claro" tenha sido escolhido explicitamente */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+
+    --page-bg: #1B1D17;
+    --sidebar-bg: #1F221B;
+    --card-bg: #22251D;
+    --card-bg-raised: #2A2E24;
+    --input-bg: #2A2E24;
+    --border-hairline: rgba(244, 241, 236, 0.08);
+    --border-hairline-strong: rgba(244, 241, 236, 0.14);
+
+    --text-primary: #F4F1EC;
+    --text-secondary: #C9C7B9;
+    --text-muted: #8F9385;
+    --text-faint: #656A5C;
+
+    --accent: #7E8870;
+    --accent-hover: #96A184;
+    --accent-active: #4B5043;
+    --accent-soft: rgba(126, 136, 112, 0.2);
+
+    --series-blue: #7594A2;
+    --series-orange: #CE9760;
+    --series-aqua: #6FAC9E;
+    --series-yellow: #CBAE55;
+    --series-magenta: #AD84A8;
+    --series-green: #8FAC72;
+    --series-violet: #9285A8;
+    --series-red: #B87360;
+
+    --status-good: #4FAE72;
+    --status-warning: #D6A445;
+    --status-serious: #D6825A;
+    --status-critical: #D6725D;
+
+    --grid-hairline: #32362A;
+    --axis-muted: #656A5C;
+
+    --shadow-card: 0 1px 0 rgba(255, 255, 255, 0.03) inset, 0 8px 24px -12px rgba(0, 0, 0, 0.5);
+  }
+}
+
+/* Escolha explícita de "escuro" via seletor de tema — vence a preferência do sistema */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
+  --page-bg: #1B1D17;
+  --sidebar-bg: #1F221B;
+  --card-bg: #22251D;
+  --card-bg-raised: #2A2E24;
+  --border-hairline: rgba(244, 241, 236, 0.08);
+  --border-hairline-strong: rgba(244, 241, 236, 0.14);
+
+  --text-primary: #F4F1EC;
+  --text-secondary: #C9C7B9;
+  --text-muted: #8F9385;
+  --text-faint: #656A5C;
+
+  --accent: #7E8870;
+  --accent-hover: #96A184;
+  --accent-active: #4B5043;
+  --accent-soft: rgba(126, 136, 112, 0.2);
+
+  --series-blue: #7594A2;
+  --series-orange: #CE9760;
+  --series-aqua: #6FAC9E;
+  --series-yellow: #CBAE55;
+  --series-magenta: #AD84A8;
+  --series-green: #8FAC72;
+  --series-violet: #9285A8;
+  --series-red: #B87360;
+
+  --status-good: #4FAE72;
+  --status-warning: #D6A445;
+  --status-serious: #D6825A;
+  --status-critical: #D6725D;
+
+  --grid-hairline: #32362A;
+  --axis-muted: #656A5C;
+
+  --shadow-card: 0 1px 0 rgba(255, 255, 255, 0.03) inset, 0 8px 24px -12px rgba(0, 0, 0, 0.5);
+}
