@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 
-const STORAGE_KEY = "painelceo-theme";
+const STORAGE_KEY = "painel-gerencial-theme";
 
 function readStoredTheme() {
   try {

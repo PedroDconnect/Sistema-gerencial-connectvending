@@ -24,7 +24,7 @@ export function Login() {
         <span className="sidebar__logo login-card__logo">
           <Icon name="bolt" size={20} />
         </span>
-        <h1 className="login-card__title">Painel CEO</h1>
+        <h1 className="login-card__title">Painel Gerencial</h1>
         <p className="login-card__subtitle">Entre com sua conta para acessar o dashboard executivo.</p>
 
         <label className="login-field">

@@ -1,4 +1,4 @@
-# Regras de Front-end — PainelCEO
+# Regras de Front-end — Painel Gerencial
 
 Consultar antes de implementar ou alterar qualquer tela. Versão condensada de
 `docs/design-system.md` — se um caso não estiver aqui, ver o documento

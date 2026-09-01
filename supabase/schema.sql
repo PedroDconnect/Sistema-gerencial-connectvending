@@ -1,4 +1,4 @@
--- CEO Dashboard — Visão Geral schema
+-- Painel Gerencial — Visão Geral schema
 -- Run this in the Supabase SQL Editor (or via `psql`) on a fresh project.
 
 create extension if not exists "pgcrypto";

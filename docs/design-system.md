@@ -1,6 +1,6 @@
-# Design System — PainelCEO
+# Design System — Painel Gerencial
 
-Este documento formaliza o Design System do PainelCEO. **Não é uma reescrita**:
+Este documento formaliza o Design System do Painel Gerencial. **Não é uma reescrita**:
 o app já tinha um sistema de cores, tipografia e componentes consistente,
 construído organicamente em `src/theme.css` e `src/App.css`. Este documento
 audita o que já existe, corrige as inconsistências reais encontradas (ver
