@@ -12,6 +12,7 @@ import { AtivosPage } from "./components/ativos/AtivosPage";
 import { OperacaoPage } from "./components/operacao/OperacaoPage";
 import { TelemetriaPage } from "./components/telemetria/TelemetriaPage";
 import { OperacaoCompletaPage } from "./components/operacaoCompleta/OperacaoCompletaPage";
+import { AdminUsersPage } from "./components/admin/AdminUsersPage";
 import { staticKpiCards, navItems } from "./data/mockData";
 import { formatCompactCurrency, formatDeltaPct } from "./lib/format";
 import { useAuth } from "./context/AuthContext";
@@ -86,8 +87,31 @@ function Dashboard() {
   );
 }
 
+// Procura tanto no nível raiz quanto dentro de grupos (ex.:
+// "operacao-chamados" mora dentro do grupo "Operação") — o find() plano
+// antigo só olhava o raiz.
+function findNavItem(id) {
+  for (const item of navItems) {
+    if (item.id === id) return item;
+    const child = item.children?.find((c) => c.id === id);
+    if (child) return child;
+  }
+  return null;
+}
+
+function AccessDenied({ label }) {
+  return (
+    <main className="main">
+      <div className="state-warning-block">
+        <strong>Sem acesso a {label}.</strong>
+        <p>Fale com um administrador se precisar dessa liberação.</p>
+      </div>
+    </main>
+  );
+}
+
 function App() {
-  const { session, loading, configured } = useAuth();
+  const { session, loading, configured, isAdmin, hasModuleAccess } = useAuth();
   const [active, setActive] = useState("overview");
 
   if (!configured) {
@@ -102,9 +126,15 @@ function App() {
     return <Login />;
   }
 
-  const activeNavItem = navItems.find((item) => item.id === active);
+  const activeNavItem = findNavItem(active);
 
   function renderContent() {
+    if (active === "administracao") {
+      return isAdmin ? <AdminUsersPage /> : <AccessDenied label="Administração" />;
+    }
+    if (!hasModuleAccess(active)) {
+      return <AccessDenied label={activeNavItem?.label ?? "este módulo"} />;
+    }
     if (active === "overview") return <Dashboard />;
     if (active === "ativos") return <AtivosPage />;
     if (active === "operacao-chamados") return <OperacaoPage scope="chamados" />;

@@ -18,12 +18,29 @@ function findActiveParentId(active) {
   return parent?.id ?? null;
 }
 
+// "administracao" é role-gated (só admin), os demais são module-gated
+// (ver hasModuleAccess) — um grupo (ex.: "Operação") só aparece se sobrar
+// pelo menos 1 filho visível, nunca um cabeçalho vazio sem nada dentro.
+function visibleNavItems(isAdmin, hasModuleAccess) {
+  return navItems
+    .map((item) => {
+      if (item.id === "administracao") return isAdmin ? item : null;
+      if (item.children) {
+        const children = item.children.filter((child) => hasModuleAccess(child.id));
+        return children.length > 0 ? { ...item, children } : null;
+      }
+      return hasModuleAccess(item.id) ? item : null;
+    })
+    .filter(Boolean);
+}
+
 export function Sidebar({ active, onNavigate }) {
-  const { user, signOut } = useAuth();
+  const { user, signOut, isAdmin, hasModuleAccess } = useAuth();
   const [theme, setTheme] = useTheme();
   const [menuOpen, setMenuOpen] = useState(false);
   const [openGroup, setOpenGroup] = useState(() => findActiveParentId(active));
   const initials = (user?.email ?? "CM").slice(0, 2).toUpperCase();
+  const items = visibleNavItems(isAdmin, hasModuleAccess);
 
   function handleGroupClick(item) {
     setOpenGroup((prev) => (prev === item.id ? null : item.id));
@@ -59,7 +76,7 @@ export function Sidebar({ active, onNavigate }) {
       </div>
 
       <nav className="sidebar__nav">
-        {navItems.map((item) => {
+        {items.map((item) => {
           if (!item.children) {
             return (
               <button
@@ -115,7 +132,7 @@ export function Sidebar({ active, onNavigate }) {
             <span className="sidebar__avatar">{initials}</span>
             <span className="sidebar__profile-text">
               <span className="sidebar__profile-name">{user?.email ?? "Carlos Mendes"}</span>
-              <span className="sidebar__profile-role">CEO</span>
+              <span className="sidebar__profile-role">{isAdmin ? "Administrador" : "Usuário"}</span>
             </span>
             <Icon name="chevronDown" size={16} />
           </button>

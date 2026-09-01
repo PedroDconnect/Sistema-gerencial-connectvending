@@ -86,4 +86,26 @@ export const navItems = [
   { id: "financeiro", label: "Financeiro", icon: "dollar" },
   { id: "newbusiness", label: "New Business", icon: "rocket" },
   { id: "posvenda", label: "Pós Venda", icon: "headset" },
+  // Só aparece pra admin (ver Sidebar.jsx) — não é um módulo concedível
+  // como os outros, é a tela que concede os outros.
+  { id: "administracao", label: "Administração", icon: "user" },
+];
+
+// Módulos que podem ser liberados por usuário na tela de Administração —
+// espelha os ids navegáveis acima (grupos como "operacao" não são
+// concedíveis diretamente, só as telas-folha dentro dele). Mantido em
+// sincronia manual com ASSIGNABLE_MODULE_IDS em
+// supabase/functions/admin/shared/auth.ts (Deno não importa este arquivo).
+export const ASSIGNABLE_MODULES = [
+  { id: "overview", label: "Visão Geral" },
+  { id: "clientes", label: "Clientes" },
+  { id: "ativos", label: "Ativos" },
+  { id: "operacao-chamados", label: "Operação · Chamados" },
+  { id: "operacao-rotina", label: "Operação · Abastecimento Rotina" },
+  { id: "telemetria", label: "Operação · Telemetria" },
+  { id: "operacao-completa", label: "Operação · Operação Completa" },
+  { id: "logistica", label: "Logística" },
+  { id: "financeiro", label: "Financeiro" },
+  { id: "newbusiness", label: "New Business" },
+  { id: "posvenda", label: "Pós Venda" },
 ];

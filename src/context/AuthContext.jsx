@@ -31,9 +31,36 @@ export function AuthProvider({ children }) {
     await supabase.auth.signOut();
   }
 
+  const user = session?.user ?? null;
+  const appMetadata = user?.app_metadata ?? {};
+  // Conta sem app_metadata.role definido é anterior à tela de
+  // Administração (implantada em 01/09/2026) — tratada como admin com
+  // acesso total, pra nunca trancar quem já usava o painel sem querer no
+  // dia em que isso entrou no ar. Só passa a valer a regra "real" (role
+  // explícito + módulos concedidos) depois que um admin salva a conta
+  // pela tela, mesmo que só pra reafirmar "admin".
+  const hasExplicitRole = typeof appMetadata.role === "string";
+  const isAdmin = hasExplicitRole ? appMetadata.role === "admin" : true;
+  const modules = Array.isArray(appMetadata.modules) ? appMetadata.modules : null;
+
+  function hasModuleAccess(moduleId) {
+    if (isAdmin) return true;
+    if (modules === null) return true; // grandfathered — ver comentário acima
+    return modules.includes(moduleId);
+  }
+
   return (
     <AuthContext.Provider
-      value={{ session, user: session?.user ?? null, loading, configured: isSupabaseConfigured, signIn, signOut }}
+      value={{
+        session,
+        user,
+        loading,
+        configured: isSupabaseConfigured,
+        signIn,
+        signOut,
+        isAdmin,
+        hasModuleAccess,
+      }}
     >
       {children}
     </AuthContext.Provider>

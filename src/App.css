@@ -2260,3 +2260,66 @@
     max-width: none;
   }
 }
+
+/* Formulário — padrão formal do design system (§13), implementado agora
+   que a tela de Administração (criar/editar usuário) precisa de verdade. */
+.form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.form-field__label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+.form-field__input {
+  height: 38px;
+  padding: 0 12px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-hairline);
+  background: var(--input-bg);
+  color: var(--text-primary);
+  font-size: 13px;
+}
+.form-field__input:focus-visible {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+.form-field__input[aria-invalid="true"] {
+  border-color: var(--status-critical);
+}
+.form-field__hint {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+.form-field__error {
+  font-size: 11px;
+  color: var(--status-critical);
+}
+
+/* Administração — grid de checkboxes de módulo no formulário de usuário. */
+.admin-users__module-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px 16px;
+  padding: 10px 12px;
+  border: 1px solid var(--border-hairline);
+  border-radius: var(--radius-md);
+  background: var(--input-bg);
+  max-height: 220px;
+  overflow-y: auto;
+}
+.admin-users__module-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--text-primary);
+}
+.admin-users__actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
