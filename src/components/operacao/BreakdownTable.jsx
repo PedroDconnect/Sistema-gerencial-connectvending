@@ -1,10 +1,15 @@
 import { formatPercent } from "../../services/operacaoService";
 
-// Ranking de quem mais e quem menos faz tarefas: as linhas já chegam
-// ordenadas por total decrescente (ver aggregate() no backend) — o número
-// de posição aqui só torna isso explícito (1º = quem mais faz, último =
-// quem menos faz), sem precisar de duas listas separadas.
-export function BreakdownTable({ title, nameLabel, rows, loading }) {
+// A partir daqui uma taxa de conclusão é "boa" (barra verde) — abaixo,
+// vermelha. Pedido explícito pro ranking de técnicos; mesmo limiar serve
+// pra qualquer BreakdownTable que ligar highlightRate.
+const RATE_GOOD_THRESHOLD = 70;
+
+// Ranking de quem mais e quem menos faz tarefas — as linhas já chegam na
+// ordem que devem aparecer (por total, ou por taxa quando highlightRate
+// está ligado — ver quem chama), o número de posição aqui só torna isso
+// explícito (1º = topo do ranking, último = fim).
+export function BreakdownTable({ title, nameLabel, rows, loading, highlightRate = false }) {
   return (
     <section className="card operacao-breakdown-table">
       <h2 className="card-title">{title}</h2>
@@ -28,17 +33,36 @@ export function BreakdownTable({ title, nameLabel, rows, loading }) {
               </tr>
             </thead>
             <tbody>
-              {rows.map((row, i) => (
-                <tr key={row.key}>
-                  <td className="num operacao-breakdown-table__rank">{i + 1}º</td>
-                  <td className="k ativos-table__truncate" title={row.label}>
-                    {row.label}
-                  </td>
-                  <td className="num">{row.total.toLocaleString("pt-BR")}</td>
-                  <td className="num">{row.finished.toLocaleString("pt-BR")}</td>
-                  <td className="num">{formatPercent(row.completionRate)}</td>
-                </tr>
-              ))}
+              {rows.map((row, i) => {
+                const isGood = row.completionRate >= RATE_GOOD_THRESHOLD;
+                return (
+                  <tr key={row.key}>
+                    <td className="num operacao-breakdown-table__rank">{i + 1}º</td>
+                    <td className="k ativos-table__truncate" title={row.label}>
+                      {row.label}
+                    </td>
+                    <td className="num">{row.total.toLocaleString("pt-BR")}</td>
+                    <td className="num">{row.finished.toLocaleString("pt-BR")}</td>
+                    <td className="num">
+                      {highlightRate ? (
+                        <span className="operacao-breakdown-table__rate">
+                          <span className="ativos-distribution__track operacao-breakdown-table__rate-track">
+                            <span
+                              className={`ativos-distribution__fill ativos-distribution__fill--${isGood ? "success" : "danger"}`}
+                              style={{ width: `${Math.min(row.completionRate, 100)}%` }}
+                            />
+                          </span>
+                          <span className={isGood ? "operacao-value--success" : "operacao-value--danger"}>
+                            {formatPercent(row.completionRate)}
+                          </span>
+                        </span>
+                      ) : (
+                        formatPercent(row.completionRate)
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>

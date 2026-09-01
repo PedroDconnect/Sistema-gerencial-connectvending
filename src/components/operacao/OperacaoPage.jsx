@@ -77,6 +77,13 @@ export function OperacaoPage({ scope }) {
 
   const byType = details.data?.byType ?? [];
   const byTechnician = details.data?.byTechnician ?? [];
+  // Ranking pedido explicitamente por taxa de conclusão (quem mais concluiu
+  // → quem menos concluiu), não por volume total de tarefas — só pra essa
+  // tabela; o filtro de técnico (byTechnician) continua na ordem de sempre.
+  const byTechnicianByRate = useMemo(
+    () => [...(details.data?.byTechnician ?? [])].sort((a, b) => b.completionRate - a.completionRate),
+    [details.data]
+  );
   const byCustomer = details.data?.byCustomer ?? [];
   const byCustomerType = details.data?.byCustomerType ?? [];
   const customerTypeCategories = details.data?.customerTypeCategories ?? [];
@@ -252,7 +259,13 @@ export function OperacaoPage({ scope }) {
 
       <section className="operacao-breakdowns-grid">
         <BreakdownTable title="Operação por Tipo" nameLabel="Tipo" rows={byType} loading={details.loading} />
-        <BreakdownTable title="Desempenho por Técnico" nameLabel="Técnico" rows={byTechnician} loading={details.loading} />
+        <BreakdownTable
+          title="Desempenho por Técnico"
+          nameLabel="Técnico"
+          rows={byTechnicianByRate}
+          loading={details.loading}
+          highlightRate
+        />
         <BreakdownTable title="Operação por Cliente" nameLabel="Cliente" rows={byCustomer} loading={details.loading} />
       </section>
 

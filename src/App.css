@@ -1808,6 +1808,15 @@
   font-weight: 600;
   width: 32px;
 }
+.operacao-breakdown-table__rate {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  justify-content: flex-end;
+}
+.operacao-breakdown-table__rate-track {
+  width: 64px;
+}
 
 .operacao-audit__page-size {
   display: flex;
