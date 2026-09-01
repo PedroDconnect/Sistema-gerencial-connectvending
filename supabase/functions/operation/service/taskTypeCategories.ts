@@ -36,14 +36,14 @@ export function classifyDailyTypeCategory(taskTypeName: string): string | null {
 
 export const DAILY_TYPE_CATEGORY_KEYS = new Set(DAILY_TYPE_CATEGORIES.map((c) => c.key));
 
-// Nomes exatos de tipo de tarefa (taskTypeName) por página de Operação —
-// usados tanto pra filtrar localmente (fallback, ver operationService.ts)
-// quanto pra resolver quais taskTypeId buscar direto na Auvo (ver
-// taskTypeCatalog.ts). "Rotina" é sempre 1 nome; "Chamados" é todo o resto
-// desta lista (nunca inventa um 8º tipo — o que não bate com nenhum destes
-// nomes, hoje, simplesmente não existe nos dados reais).
+// Nome(s) exato(s) de tipo de tarefa (taskTypeName) que contam como
+// "rotina" — hoje só "Abastecimento Rotina". Usado tanto pra filtrar
+// localmente (fallback, ver operationService.ts) quanto pra resolver o
+// taskTypeId direto na Auvo (ver taskTypeCatalog.ts). Não existe uma lista
+// simétrica "CHAMADOS_TASK_TYPE_NAMES" de propósito — ver o comentário de
+// resolveScopeTaskTypeIds em operationService.ts (uma lista fixa de "tudo
+// que não é rotina" já se provou incompleta na prática).
 export const ROTINA_TASK_TYPE_NAMES = DAILY_TYPE_CATEGORIES.filter((c) => c.routine).flatMap((c) => c.matches);
-export const CHAMADOS_TASK_TYPE_NAMES = DAILY_TYPE_CATEGORIES.filter((c) => !c.routine).flatMap((c) => c.matches);
 
 export function isRoutineTaskTypeName(taskTypeName: string): boolean {
   return ROTINA_TASK_TYPE_NAMES.includes(taskTypeName);

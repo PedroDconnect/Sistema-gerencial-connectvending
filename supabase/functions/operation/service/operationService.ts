@@ -6,7 +6,6 @@ import { getOrSet } from "../shared/cache.ts";
 import {
   DAILY_TYPE_CATEGORIES,
   classifyDailyTypeCategory,
-  CHAMADOS_TASK_TYPE_NAMES,
   ROTINA_TASK_TYPE_NAMES,
   isRoutineTaskTypeName,
 } from "./taskTypeCategories.ts";
@@ -140,21 +139,37 @@ function fetchAllCached(provider: IntegrationProvider, providerFilters: TaskFilt
   return getOrSet(cacheKey, SHARED_FETCH_TTL_MS, () => fetchAllForProviderFilters(provider, providerFilters));
 }
 
-// Resolve os nomes de tipo do escopo ("chamados" = os 6 tipos que não são
-// rotina, "rotina" = só "Abastecimento Rotina") pros taskTypeId reais já
-// descobertos no catálogo (ver taskTypeCatalog.ts). "resolved" só vira
-// true quando TODOS os nomes do escopo já têm id conhecido — parcial não
-// serve, senão um tipo ainda não visto (ex.: "Chamado logística", sem
-// nenhuma tarefa até 20/08/2026) some silenciosamente da página
-// "Chamados" em vez de cair no caminho lento (que ainda enxerga tudo).
+// "rotina" é 1 nome fixo só ("Abastecimento Rotina") — "resolved" exige
+// esse único id já conhecido, sem o quê a Auvo não tem como filtrar.
+//
+// "chamados" é o oposto: NUNCA uma lista fixa de nomes. Confirmado ao vivo
+// em 01/09/2026 (primeiro dia em produção) que a Auvo tem mais tipos de
+// tarefa reais do que os 7 amostrados originalmente (ex.: "Preventiva",
+// "Deslocamento", "Leitura", "Chamado Telemetria" apareceram sem aviso) —
+// uma lista fixa faria esses tipos sumirem da página assim que o
+// catálogo "completasse", sem ninguém perceber. Em vez disso, "chamados"
+// é sempre TODO tipo que o catálogo já viu que não é rotina — cresce
+// sozinho conforme a Auvo é usada, nunca precisa de manutenção manual, e
+// nunca inventa um tipo que não foi visto de verdade (só ainda não
+// inclui um tipo que NINGUÉM disparou nenhuma tarefa até agora — mesma
+// limitação que "Chamado logística" já tinha antes, não é regressão).
 async function resolveScopeTaskTypeIds(
   db: SupabaseClient,
   scope: "chamados" | "rotina"
 ): Promise<{ ids: number[]; resolved: boolean }> {
-  const names = scope === "rotina" ? ROTINA_TASK_TYPE_NAMES : CHAMADOS_TASK_TYPE_NAMES;
   const catalog = await readTaskTypeCatalog(db);
-  const ids = names.map((name) => catalog.get(name)).filter((id): id is number => typeof id === "number");
-  return { ids, resolved: ids.length === names.length };
+
+  if (scope === "rotina") {
+    const ids = ROTINA_TASK_TYPE_NAMES.map((name) => catalog.get(name)).filter(
+      (id): id is number => typeof id === "number"
+    );
+    return { ids, resolved: ids.length === ROTINA_TASK_TYPE_NAMES.length };
+  }
+
+  const ids = Array.from(catalog.entries())
+    .filter(([name]) => !isRoutineTaskTypeName(name))
+    .map(([, id]) => id);
+  return { ids, resolved: ids.length > 0 };
 }
 
 // Confirmado empiricamente contra a API real: o filtro "status" da Auvo
