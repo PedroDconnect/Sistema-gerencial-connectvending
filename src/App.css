@@ -1780,37 +1780,6 @@
   padding: 4px 10px 14px 32px;
 }
 
-.operacao-mid-grid {
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-}
-
-.operacao-performance__bars {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  margin-top: 14px;
-}
-.operacao-performance__row {
-  display: grid;
-  grid-template-columns: 90px 1fr 64px;
-  align-items: center;
-  gap: 12px;
-}
-.operacao-performance__label {
-  font-size: 12.5px;
-  color: var(--text-secondary);
-  font-weight: 600;
-}
-.operacao-performance__track {
-  height: 10px;
-}
-.operacao-performance__value {
-  font-size: 14px;
-  font-weight: 700;
-  color: var(--text-primary);
-  text-align: right;
-}
-
 .operacao-status-breakdown__list {
   display: flex;
   flex-direction: column;
@@ -1863,9 +1832,6 @@
 }
 
 @media (max-width: 1100px) {
-  .operacao-mid-grid {
-    grid-template-columns: 1fr;
-  }
   .operacao-filters__selects {
     grid-template-columns: repeat(2, 1fr);
   }

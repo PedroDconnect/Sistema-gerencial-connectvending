@@ -4,7 +4,6 @@ import { StatTile } from "../ativos/StatTile";
 import { OperacaoFilters } from "./OperacaoFilters";
 import { DailyTypeMetrics } from "./DailyTypeMetrics";
 import { StatusBreakdown } from "./StatusBreakdown";
-import { PerformanceChart } from "./PerformanceChart";
 import { BreakdownTable } from "./BreakdownTable";
 import { CustomerTypeTable } from "./CustomerTypeTable";
 import { CustomerSlaTable } from "./CustomerSlaTable";
@@ -237,14 +236,7 @@ export function OperacaoPage({ scope }) {
 
       <DailyTypeMetrics metrics={details.data?.dailyTypeMetrics ?? []} loading={details.loading} baseParams={params} />
 
-      <section className="mid-grid operacao-mid-grid">
-        <PerformanceChart
-          total={totalToday}
-          finished={details.data?.finished ?? 0}
-          loading={details.loading || isDetailsIncomplete}
-        />
-        <StatusBreakdown summary={details.data} loading={details.loading || isDetailsIncomplete} />
-      </section>
+      <StatusBreakdown summary={details.data} loading={details.loading || isDetailsIncomplete} />
 
       {scope !== "rotina" && (
         <>
