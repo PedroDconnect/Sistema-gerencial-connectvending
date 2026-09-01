@@ -57,7 +57,7 @@ export function TasksAuditTable({ tasks, page, pageSize, onPageChange, onPageSiz
                   <th className="num">ID</th>
                   <th>Data</th>
                   <th>Tipo</th>
-                  <th>Técnico</th>
+                  <th>Colaborador</th>
                   <th>Cliente</th>
                   <th>Status</th>
                   <th className="num">Atendimento</th>

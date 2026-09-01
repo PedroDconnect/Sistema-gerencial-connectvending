@@ -95,7 +95,7 @@ export function TaskDetailDrawer({ taskId, onClose }) {
                 <span className="drawer-section__eyebrow">Identificação</span>
                 <PlainRow label="Tipo" value={task.taskTypeName} />
                 <PlainRow label="Status" value={taskStatusLabel(task.status)} />
-                <PlainRow label="Técnico" value={task.technicianName} />
+                <PlainRow label="Colaborador" value={task.technicianName} />
                 <PlainRow label="Data" value={formatDateTime(task.taskDate)} />
                 <PlainRow label="Prioridade" value={task.priority} />
               </section>

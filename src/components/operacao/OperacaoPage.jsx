@@ -260,8 +260,8 @@ export function OperacaoPage({ scope }) {
       <section className="operacao-breakdowns-grid">
         <BreakdownTable title="Operação por Tipo" nameLabel="Tipo" rows={byType} loading={details.loading} />
         <BreakdownTable
-          title="Desempenho por Técnico"
-          nameLabel="Técnico"
+          title="Desempenho por Colaborador"
+          nameLabel="Colaborador"
           rows={byTechnicianByRate}
           loading={details.loading}
           highlightRate

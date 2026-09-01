@@ -30,7 +30,15 @@ const SHARED_FETCH_TTL_MS = 30_000;
 // mensagens de erro conseguir sair. Esse prazo garante que a Function
 // SEMPRE devolve algo nosso (dados parciais + dataIncomplete=true) com
 // folga antes desse teto, em vez de arriscar o corte seco da plataforma.
-const FETCH_DEADLINE_MS = 100_000;
+//
+// Ajustado de 100s pra 130s em 01/09/2026: confirmado ao vivo que
+// "Abastecimento Rotina" sozinho já passa de 900 tarefas/dia (10 páginas),
+// e o pior caso de 2 rodadas de 8 workers com retry completo em cada
+// página (2 × ~25s × 2 tentativas ≈ 100s) batia bem em cima do teto
+// antigo — não era só um dia catastrófico da Auvo, era o volume normal
+// desse tipo já perto do limite. 130s mantém 20s de folga antes do corte
+// de 150s da plataforma.
+const FETCH_DEADLINE_MS = 130_000;
 
 // Acima disso, agregar (by-type/by-technician/by-customer/summary/tasks
 // com filtro de status) exigiria paginar tarefas demais — melhor pedir

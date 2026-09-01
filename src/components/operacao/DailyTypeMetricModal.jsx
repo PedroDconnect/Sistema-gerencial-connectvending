@@ -127,7 +127,7 @@ export function DailyTypeMetricModal({ metric, baseParams, onClose }) {
                               <thead>
                                 <tr>
                                   <th>Data</th>
-                                  <th>Técnico</th>
+                                  <th>Colaborador</th>
                                   <th>Status</th>
                                   <th>Ações</th>
                                 </tr>

@@ -86,7 +86,7 @@ export function OperacaoFilters({ filters, onChange, onClear, technicianOptions,
         )}
 
         <label className="operacao-filters__field">
-          <span>Técnico</span>
+          <span>Colaborador</span>
           <select value={filters.technician} onChange={(e) => onChange("technician", e.target.value)}>
             <option value="">Todos</option>
             {technicianOptions.map((opt) => (
