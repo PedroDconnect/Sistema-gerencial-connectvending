@@ -1,13 +1,18 @@
 import { PERIOD_PRESETS, TASK_STATUS_OPTIONS, SLA_FILTER_OPTIONS } from "../../services/operacaoService";
 
-export function OperacaoFilters({ filters, onChange, onClear, technicianOptions, customerOptions, typeOptions }) {
+export function OperacaoFilters({ filters, onChange, onClear, technicianOptions, customerOptions, typeOptions, scope }) {
+  // Abastecimento Rotina é só 1 tipo (não passa por SLA — ver isSlaEligible
+  // no backend) — mostrar os dois seletores ali seria filtro sem efeito.
+  const showTypeFilter = scope !== "rotina";
+  const showSlaFilter = scope !== "rotina";
+
   const hasActiveFilters =
     filters.period !== "today" ||
     filters.status ||
     filters.technician ||
     filters.customer ||
-    filters.type ||
-    filters.sla;
+    (showTypeFilter && filters.type) ||
+    (showSlaFilter && filters.sla);
 
   return (
     <section className="card operacao-filters">
@@ -25,17 +30,19 @@ export function OperacaoFilters({ filters, onChange, onClear, technicianOptions,
           ))}
         </div>
 
-        <label className="operacao-filters__field operacao-filters__field--sla">
-          <span>SLA</span>
-          <select value={filters.sla} onChange={(e) => onChange("sla", e.target.value)}>
-            <option value="">Todos os chamados</option>
-            {SLA_FILTER_OPTIONS.map((opt) => (
-              <option key={opt.value} value={opt.value}>
-                {opt.label}
-              </option>
-            ))}
-          </select>
-        </label>
+        {showSlaFilter && (
+          <label className="operacao-filters__field operacao-filters__field--sla">
+            <span>SLA</span>
+            <select value={filters.sla} onChange={(e) => onChange("sla", e.target.value)}>
+              <option value="">Todos os chamados</option>
+              {SLA_FILTER_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
       </div>
 
       {filters.period === "custom" && (
@@ -64,17 +71,19 @@ export function OperacaoFilters({ filters, onChange, onClear, technicianOptions,
           </select>
         </label>
 
-        <label className="operacao-filters__field">
-          <span>Tipo de operação</span>
-          <select value={filters.type} onChange={(e) => onChange("type", e.target.value)}>
-            <option value="">Todos</option>
-            {typeOptions.map((opt) => (
-              <option key={opt.key} value={opt.key}>
-                {opt.label}
-              </option>
-            ))}
-          </select>
-        </label>
+        {showTypeFilter && (
+          <label className="operacao-filters__field">
+            <span>Tipo de operação</span>
+            <select value={filters.type} onChange={(e) => onChange("type", e.target.value)}>
+              <option value="">Todos</option>
+              {typeOptions.map((opt) => (
+                <option key={opt.key} value={opt.key}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
 
         <label className="operacao-filters__field">
           <span>Técnico</span>

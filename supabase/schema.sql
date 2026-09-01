@@ -508,3 +508,24 @@ alter table auvo_tasks_cache enable row level security;
 -- com um cache_key próprio ('auvo_assets_sync') — não é um snapshot jsonb
 -- de negócio (esse mora nas tabelas acima), só os metadados/lock da
 -- sincronização (sync_started_at/finished_at/status/contagens/erro).
+
+-- ---------- Catálogo de tipos de tarefa (Auvo) ----------
+-- A Auvo aceita filtrar tarefas por taskTypeId direto na API (mais barato
+-- que buscar tudo do período e separar aqui), mas não tem endpoint de
+-- referência pra listar os tipos configurados — só descobrimos id+nome
+-- quando uma tarefa daquele tipo já foi buscada ao menos uma vez. Esta
+-- tabela guarda esse mapeamento conforme ele é descoberto (gravado de
+-- graça a cada /operation/tasks ou /operation/details, ver
+-- auvo.provider.ts), pra permitir que as páginas "Chamados" e
+-- "Abastecimento Rotina" filtrem direto na Auvo em vez de buscar o
+-- período inteiro. Um tipo que nunca teve nenhuma tarefa (ex.: "Chamado
+-- logística" até 20/08/2026) simplesmente não tem linha aqui ainda —
+-- nunca inventamos um id; a busca cai no caminho lento (de sempre) até
+-- esse tipo aparecer pela primeira vez.
+create table if not exists auvo_task_type_catalog (
+  task_type_name text primary key,
+  task_type_id bigint not null,
+  updated_at timestamptz not null default now()
+);
+
+alter table auvo_task_type_catalog enable row level security;

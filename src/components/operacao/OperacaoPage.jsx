@@ -26,8 +26,20 @@ const EMPTY_FILTERS = {
   sla: "",
 };
 
-function buildParams(filters) {
+const SCOPE_META = {
+  chamados: {
+    title: "Operação · Chamados",
+    subtitle: "Chamados técnicos, VmPay/UpPay, degustação e afins — sem abastecimento de rotina.",
+  },
+  rotina: {
+    title: "Operação · Abastecimento Rotina",
+    subtitle: "Só as visitas de reposição programada, separadas dos chamados pra carregar rápido.",
+  },
+};
+
+function buildParams(filters, scope) {
   const params = {};
+  if (scope) params.scope = scope;
 
   if (filters.period === "custom" && filters.dateFrom && filters.dateTo) {
     params.dateFrom = filters.dateFrom;
@@ -45,13 +57,14 @@ function buildParams(filters) {
   return params;
 }
 
-export function OperacaoPage() {
+export function OperacaoPage({ scope }) {
   const [filters, setFilters] = useState(EMPTY_FILTERS);
   const [selectedTaskId, setSelectedTaskId] = useState(null);
   const [auditPage, setAuditPage] = useState(1);
   const [auditPageSize, setAuditPageSize] = useState(25);
 
-  const params = useMemo(() => buildParams(filters), [filters]);
+  const meta = SCOPE_META[scope] ?? { title: "Operação", subtitle: "Visão consolidada da operação em tempo real." };
+  const params = useMemo(() => buildParams(filters, scope), [filters, scope]);
 
   // Duas velocidades de propósito: /summary só conta o total (rápido, um
   // request leve) e pinta "Tarefas hoje" na hora. /details busca as
@@ -110,8 +123,8 @@ export function OperacaoPage() {
     <main className="main operacao-page">
       <header className="topbar">
         <div>
-          <h1 className="topbar__title">Operação</h1>
-          <p className="topbar__subtitle">Visão consolidada da operação em tempo real.</p>
+          <h1 className="topbar__title">{meta.title}</h1>
+          <p className="topbar__subtitle">{meta.subtitle}</p>
         </div>
         <div className="topbar__actions">
           {details.data && (
@@ -157,6 +170,7 @@ export function OperacaoPage() {
         technicianOptions={byTechnician}
         customerOptions={byCustomer}
         typeOptions={byType}
+        scope={scope}
       />
 
       <section className="operacao-kpi-grid">
@@ -201,9 +215,17 @@ export function OperacaoPage() {
         <StatusBreakdown summary={details.data} loading={details.loading || isDetailsIncomplete} />
       </section>
 
-      <CustomerTypeTable rows={byCustomerType} categories={customerTypeCategories} loading={details.loading} />
-
-      <CustomerSlaTable rows={byCustomerSla} slaHours={slaHours} loading={details.loading} />
+      {scope !== "rotina" && (
+        <>
+          {/* Abastecimento de rotina nunca entra nessas duas: nenhuma das 3
+              categorias nomeadas bate com "Abastecimento Rotina" (cairia tudo
+              em "outros") e SLA não se aplica a ela (ver isSlaEligible no
+              backend) — mostrar aqui na página dedicada de rotina só
+              confundiria com tabelas sempre vazias/genéricas. */}
+          <CustomerTypeTable rows={byCustomerType} categories={customerTypeCategories} loading={details.loading} />
+          <CustomerSlaTable rows={byCustomerSla} slaHours={slaHours} loading={details.loading} />
+        </>
+      )}
 
       <section className="operacao-breakdowns-grid">
         <BreakdownTable title="Operação por Tipo" nameLabel="Tipo" rows={byType} loading={details.loading} />

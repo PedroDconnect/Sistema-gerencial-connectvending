@@ -79,6 +79,10 @@ function parseTypeCategory(value: string | null): string | undefined {
   return value && DAILY_TYPE_CATEGORY_KEYS.has(value) ? value : undefined;
 }
 
+function parseScope(value: string | null): "chamados" | "rotina" | undefined {
+  return value === "chamados" || value === "rotina" ? value : undefined;
+}
+
 export function parseTaskFilters(params: URLSearchParams): TaskFilters {
   const { dateFrom, dateTo } = resolveDateRange(params);
   return {
@@ -90,6 +94,7 @@ export function parseTaskFilters(params: URLSearchParams): TaskFilters {
     taskTypeId: parseOptionalInt(params.get("type")),
     sla: parseSla(params.get("sla")),
     typeCategory: parseTypeCategory(params.get("typeCategory")),
+    scope: parseScope(params.get("scope")),
   };
 }
 

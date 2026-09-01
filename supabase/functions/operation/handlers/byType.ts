@@ -9,6 +9,6 @@ export async function handleByType(db: SupabaseClient, url: URL): Promise<Respon
   const filters = parseTaskFilters(url.searchParams);
   const provider = createAuvoProvider(db);
   const cacheKey = `by-type:${JSON.stringify(filters)}`;
-  const result = await getOrSet(cacheKey, 15_000, () => getByType(provider, filters));
+  const result = await getOrSet(cacheKey, 15_000, () => getByType(db, provider, filters));
   return jsonResponse({ items: result });
 }

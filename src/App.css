@@ -1572,7 +1572,7 @@
   font-weight: 700;
 }
 
-/* Métricas do Dia — cards por tipo de chamado, "bater o olho" pro CEO */
+/* Métricas do Dia — cards por tipo de chamado, "bater o olho" no painel gerencial */
 .operacao-daily-metrics__grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));

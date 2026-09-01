@@ -107,7 +107,8 @@ function App() {
   function renderContent() {
     if (active === "overview") return <Dashboard />;
     if (active === "ativos") return <AtivosPage />;
-    if (active === "operacao-tarefas") return <OperacaoPage />;
+    if (active === "operacao-chamados") return <OperacaoPage scope="chamados" />;
+    if (active === "operacao-rotina") return <OperacaoPage scope="rotina" />;
     if (active === "telemetria") return <TelemetriaPage />;
     if (active === "operacao-completa") return <OperacaoCompletaPage />;
     return <ComingSoon label={activeNavItem?.label ?? "Módulo"} icon={activeNavItem?.icon ?? "gear"} />;

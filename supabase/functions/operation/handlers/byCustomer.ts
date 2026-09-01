@@ -9,6 +9,6 @@ export async function handleByCustomer(db: SupabaseClient, url: URL): Promise<Re
   const filters = parseTaskFilters(url.searchParams);
   const provider = createAuvoProvider(db);
   const cacheKey = `by-customer:${JSON.stringify(filters)}`;
-  const result = await getOrSet(cacheKey, 15_000, () => getByCustomer(provider, filters));
+  const result = await getOrSet(cacheKey, 15_000, () => getByCustomer(db, provider, filters));
   return jsonResponse({ items: result });
 }

@@ -1,8 +1,16 @@
+import { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { IntegrationProvider, Task, TaskFilters, TaskListParams, TaskPage } from "../integrations/types.ts";
 import { ALL_TASK_STATUSES, TaskStatus, taskStatusLabel } from "./status.ts";
 import { ControlledError } from "../shared/http.ts";
 import { getOrSet } from "../shared/cache.ts";
-import { DAILY_TYPE_CATEGORIES, classifyDailyTypeCategory } from "./taskTypeCategories.ts";
+import {
+  DAILY_TYPE_CATEGORIES,
+  classifyDailyTypeCategory,
+  CHAMADOS_TASK_TYPE_NAMES,
+  ROTINA_TASK_TYPE_NAMES,
+  isRoutineTaskTypeName,
+} from "./taskTypeCategories.ts";
+import { readTaskTypeCatalog } from "./taskTypeCatalog.ts";
 import { AUVO_CONCURRENCY_LIMIT } from "../integrations/auvo/auvo.config.ts";
 
 // A Auvo não pagina barato: cada tarefa vem com questionários, fotos,
@@ -127,6 +135,28 @@ async function fetchAllForProviderFilters(
   return { tasks: items, incomplete };
 }
 
+function fetchAllCached(provider: IntegrationProvider, providerFilters: TaskFilters): Promise<PageFetchResult> {
+  const cacheKey = `operation-tasks:${JSON.stringify(providerFilters)}`;
+  return getOrSet(cacheKey, SHARED_FETCH_TTL_MS, () => fetchAllForProviderFilters(provider, providerFilters));
+}
+
+// Resolve os nomes de tipo do escopo ("chamados" = os 6 tipos que não são
+// rotina, "rotina" = só "Abastecimento Rotina") pros taskTypeId reais já
+// descobertos no catálogo (ver taskTypeCatalog.ts). "resolved" só vira
+// true quando TODOS os nomes do escopo já têm id conhecido — parcial não
+// serve, senão um tipo ainda não visto (ex.: "Chamado logística", sem
+// nenhuma tarefa até 20/08/2026) some silenciosamente da página
+// "Chamados" em vez de cair no caminho lento (que ainda enxerga tudo).
+async function resolveScopeTaskTypeIds(
+  db: SupabaseClient,
+  scope: "chamados" | "rotina"
+): Promise<{ ids: number[]; resolved: boolean }> {
+  const names = scope === "rotina" ? ROTINA_TASK_TYPE_NAMES : CHAMADOS_TASK_TYPE_NAMES;
+  const catalog = await readTaskTypeCatalog(db);
+  const ids = names.map((name) => catalog.get(name)).filter((id): id is number => typeof id === "number");
+  return { ids, resolved: ids.length === names.length };
+}
+
 // Confirmado empiricamente contra a API real: o filtro "status" da Auvo
 // não é confiável — para valores como 2, 3 e 4 ela ignora o filtro e
 // devolve tarefas de outro status (chegamos a receber taskStatus=5 ao
@@ -134,12 +164,47 @@ async function fetchAllForProviderFilters(
 // 404/500 quando o resultado seria zero. Por isso "status" NUNCA é
 // enviado para a Auvo (ver auvo.provider.ts) — toda contagem/filtro por
 // status abaixo é feita sobre tarefas reais já buscadas, no nosso lado.
-async function fetchTasksForRange(provider: IntegrationProvider, filters: TaskFilters): Promise<PageFetchResult> {
-  const { status, sla, typeCategory, ...providerFilters } = filters;
-  const cacheKey = `operation-tasks:${JSON.stringify(providerFilters)}`;
-  const { tasks, incomplete } = await getOrSet(cacheKey, SHARED_FETCH_TTL_MS, () =>
-    fetchAllForProviderFilters(provider, providerFilters)
-  );
+async function fetchTasksForRange(
+  db: SupabaseClient,
+  provider: IntegrationProvider,
+  filters: TaskFilters
+): Promise<PageFetchResult> {
+  const { status, sla, typeCategory, scope, ...providerFilters } = filters;
+  // Um "Tipo de operação" escolhido manualmente já é mais específico que o
+  // escopo da página (e as opções do seletor já vêm de um resultado
+  // escopado) — nesse caso nunca expande em múltiplos taskTypeId, só passa
+  // o id escolhido direto, como sempre funcionou.
+  const hasExplicitType = typeof providerFilters.taskTypeId === "number";
+  const resolved = scope && !hasExplicitType ? await resolveScopeTaskTypeIds(db, scope) : null;
+
+  let tasks: Task[];
+  let incomplete: boolean;
+
+  if (resolved && resolved.resolved && resolved.ids.length > 0) {
+    // Caminho rápido: 1 busca por taskTypeId já conhecido, direto na Auvo
+    // (cada uma com sua própria cache/paginação/prazo — ver
+    // fetchAllCached) — nunca baixa o período inteiro só pra descartar
+    // metade depois.
+    const perType = await Promise.all(
+      resolved.ids.map((taskTypeId) => fetchAllCached(provider, { ...providerFilters, taskTypeId }))
+    );
+    tasks = perType.flatMap((r) => r.tasks);
+    incomplete = perType.some((r) => r.incomplete);
+  } else {
+    // Catálogo ainda não resolveu todos os tipos do escopo (recém
+    // implantado, ou um tipo sem nenhuma tarefa ainda) — cai no caminho de
+    // sempre: busca o período inteiro e separa por nome aqui. Essa mesma
+    // busca completa realimenta o catálogo (ver auvo.provider.ts), então
+    // o próximo request tende a já usar o caminho rápido.
+    const full = await fetchAllCached(provider, providerFilters);
+    tasks =
+      scope && !hasExplicitType
+        ? full.tasks.filter((t) =>
+            scope === "rotina" ? isRoutineTaskTypeName(t.taskTypeName) : !isRoutineTaskTypeName(t.taskTypeName)
+          )
+        : full.tasks;
+    incomplete = full.incomplete;
+  }
 
   let result = status ? tasks.filter((t) => t.status === status) : tasks;
   if (sla) result = result.filter((t) => taskSlaStatus(t) === sla);
@@ -196,9 +261,30 @@ export interface QuickTotalResult {
   generatedAt: string;
 }
 
-export async function getQuickTotal(provider: IntegrationProvider, filters: TaskFilters): Promise<QuickTotalResult> {
-  const { status: _ignoredStatus, sla: _ignoredSla, typeCategory: _ignoredTypeCategory, ...providerFilters } = filters;
-  const total = await safeCount(() => provider.countTasks(providerFilters));
+export async function getQuickTotal(
+  db: SupabaseClient,
+  provider: IntegrationProvider,
+  filters: TaskFilters
+): Promise<QuickTotalResult> {
+  const { status: _ignoredStatus, sla: _ignoredSla, typeCategory: _ignoredTypeCategory, scope, ...providerFilters } = filters;
+  const hasExplicitType = typeof providerFilters.taskTypeId === "number";
+  const resolved = scope && !hasExplicitType ? await resolveScopeTaskTypeIds(db, scope) : null;
+
+  let total: number;
+  if (resolved && resolved.resolved && resolved.ids.length > 0) {
+    const counts = await Promise.all(
+      resolved.ids.map((taskTypeId) => safeCount(() => provider.countTasks({ ...providerFilters, taskTypeId })))
+    );
+    total = counts.reduce((a, b) => a + b, 0);
+  } else {
+    // Catálogo ainda sem os ids do escopo: a Auvo não filtra por nome, só
+    // por id, então não dá pra contar só o escopo sem buscar tarefas de
+    // verdade — melhor mostrar o total geral (impreciso por pouco tempo,
+    // até o catálogo resolver) do que travar este tile "rápido" esperando
+    // uma busca completa.
+    total = await safeCount(() => provider.countTasks(providerFilters));
+  }
+
   return { dateFrom: filters.dateFrom, dateTo: filters.dateTo, total, generatedAt: new Date().toISOString() };
 }
 
@@ -232,8 +318,12 @@ function aggregate(tasks: Task[], keyOf: (t: Task) => string, labelOf: (t: Task)
     .sort((a, b) => b.total - a.total);
 }
 
-export async function getByType(provider: IntegrationProvider, filters: TaskFilters): Promise<BreakdownRow[]> {
-  const { tasks } = await fetchTasksForRange(provider, filters);
+export async function getByType(
+  db: SupabaseClient,
+  provider: IntegrationProvider,
+  filters: TaskFilters
+): Promise<BreakdownRow[]> {
+  const { tasks } = await fetchTasksForRange(db, provider, filters);
   return aggregate(
     tasks,
     (t) => String(t.taskTypeId),
@@ -241,8 +331,12 @@ export async function getByType(provider: IntegrationProvider, filters: TaskFilt
   );
 }
 
-export async function getByTechnician(provider: IntegrationProvider, filters: TaskFilters): Promise<BreakdownRow[]> {
-  const { tasks } = await fetchTasksForRange(provider, filters);
+export async function getByTechnician(
+  db: SupabaseClient,
+  provider: IntegrationProvider,
+  filters: TaskFilters
+): Promise<BreakdownRow[]> {
+  const { tasks } = await fetchTasksForRange(db, provider, filters);
   return aggregate(
     tasks,
     (t) => String(t.technicianId),
@@ -250,8 +344,12 @@ export async function getByTechnician(provider: IntegrationProvider, filters: Ta
   );
 }
 
-export async function getByCustomer(provider: IntegrationProvider, filters: TaskFilters): Promise<BreakdownRow[]> {
-  const { tasks } = await fetchTasksForRange(provider, filters);
+export async function getByCustomer(
+  db: SupabaseClient,
+  provider: IntegrationProvider,
+  filters: TaskFilters
+): Promise<BreakdownRow[]> {
+  const { tasks } = await fetchTasksForRange(db, provider, filters);
   return aggregate(
     tasks,
     (t) => String(t.customerId),
@@ -405,7 +503,7 @@ export interface DailyTypeMetric {
   byCustomer: DailyTypeMetricCustomerRow[];
 }
 
-// Métricas do dia pedidas explicitamente pelo CEO — 7 categorias fixas
+// Métricas do dia pedidas explicitamente para o painel gerencial — 7 categorias fixas
 // (ver taskTypeCategories.ts), sempre presentes na resposta mesmo com 0
 // tarefas (ex.: "Chamado logística", que ainda não apareceu nos dados
 // reais), para o card já existir no painel em vez de aparecer/desaparecer.
@@ -413,22 +511,28 @@ export interface DailyTypeMetric {
 // popup "Visualizar" instantaneamente, sem round-trip nenhum — só a lista
 // de tarefas de um cliente específico, quando o usuário abre uma linha
 // dentro do popup, é que pede de verdade (GET /tasks?typeCategory=...).
-function aggregateDailyTypeMetrics(tasks: Task[]): DailyTypeMetric[] {
-  const totals = new Map(DAILY_TYPE_CATEGORIES.map((c) => [c.key, { total: 0, finished: 0 }]));
+function aggregateDailyTypeMetrics(tasks: Task[], categories = DAILY_TYPE_CATEGORIES): DailyTypeMetric[] {
+  const totals = new Map(categories.map((c) => [c.key, { total: 0, finished: 0 }]));
   const byCustomer = new Map<string, Map<string, { customerName: string; total: number; finished: number }>>(
-    DAILY_TYPE_CATEGORIES.map((c) => [c.key, new Map()])
+    categories.map((c) => [c.key, new Map()])
   );
 
   for (const task of tasks) {
     const key = classifyDailyTypeCategory(task.taskTypeName);
     if (!key) continue;
-    const isFinished = task.status === TaskStatus.FINISHED;
+    // Defensivo: com escopo, "tasks" já devia trazer só o tipo do próprio
+    // escopo (ver fetchTasksForRange) — se por algum motivo aparecer um
+    // tipo de fora, ele não tem entrada em "totals"/"byCustomer" (que só
+    // têm as categorias filtradas) e é ignorado aqui, nunca derruba a
+    // função tentando escrever num Map que não existe.
+    const totalsEntry = totals.get(key);
+    const customerMap = byCustomer.get(key);
+    if (!totalsEntry || !customerMap) continue;
 
-    const totalsEntry = totals.get(key)!;
+    const isFinished = task.status === TaskStatus.FINISHED;
     totalsEntry.total += 1;
     if (isFinished) totalsEntry.finished += 1;
 
-    const customerMap = byCustomer.get(key)!;
     const customerKey = String(task.customerId);
     const customerEntry = customerMap.get(customerKey) ?? {
       customerName: task.customerName || "Não informado",
@@ -440,7 +544,7 @@ function aggregateDailyTypeMetrics(tasks: Task[]): DailyTypeMetric[] {
     customerMap.set(customerKey, customerEntry);
   }
 
-  return DAILY_TYPE_CATEGORIES.map(({ key, label }) => {
+  return categories.map(({ key, label }) => {
     const { total, finished } = totals.get(key)!;
     const customerRows = Array.from(byCustomer.get(key)!.entries())
       .map(([customerId, { customerName, total, finished }]) => ({
@@ -487,8 +591,19 @@ export interface OverviewResult extends SummaryResult {
 // diferentes em memória, resolve isso pela raiz em vez de depender de
 // cache entre isolates (que não é garantida — mesmo motivo por trás do
 // TokenManager usar Postgres em vez de memória).
-export async function getOverview(provider: IntegrationProvider, filters: TaskFilters): Promise<OverviewResult> {
-  const { tasks, incomplete } = await fetchTasksForRange(provider, filters);
+export async function getOverview(
+  db: SupabaseClient,
+  provider: IntegrationProvider,
+  filters: TaskFilters
+): Promise<OverviewResult> {
+  const { tasks, incomplete } = await fetchTasksForRange(db, provider, filters);
+
+  // Métricas do Dia: com escopo, só os cards do próprio escopo fazem
+  // sentido (senão as 6 categorias de "fora" aparecem zeradas na página
+  // "Abastecimento Rotina", e vice-versa, parecendo card quebrado).
+  const dailyTypeCategories = filters.scope
+    ? DAILY_TYPE_CATEGORIES.filter((c) => Boolean(c.routine) === (filters.scope === "rotina"))
+    : DAILY_TYPE_CATEGORIES;
 
   return {
     ...summarize(tasks, filters),
@@ -511,7 +626,7 @@ export async function getOverview(provider: IntegrationProvider, filters: TaskFi
     customerTypeCategories: CUSTOMER_TYPE_CATEGORIES.map(({ key, label }) => ({ key, label })),
     byCustomerSla: aggregateBySla(tasks),
     slaHours: SLA_HOURS,
-    dailyTypeMetrics: aggregateDailyTypeMetrics(tasks),
+    dailyTypeMetrics: aggregateDailyTypeMetrics(tasks, dailyTypeCategories),
     dataIncomplete: incomplete,
   };
 }
@@ -521,12 +636,31 @@ export async function getOverview(provider: IntegrationProvider, filters: TaskFi
 // "status"/"sla" pra Auvo — nenhum dos dois é campo dela, ver
 // fetchTasksForRange), filtra e pagina aqui mesmo, porque a paginação
 // nativa da Auvo não tem como saber do filtro que só nós aplicamos depois.
-export async function getTasksPage(provider: IntegrationProvider, params: TaskListParams): Promise<TaskPage> {
+export async function getTasksPage(
+  db: SupabaseClient,
+  provider: IntegrationProvider,
+  params: TaskListParams
+): Promise<TaskPage> {
+  const hasExplicitType = typeof params.taskTypeId === "number";
+
   if (!params.status && !params.sla && !params.typeCategory) {
-    return provider.listTasks(params);
+    if (!params.scope || hasExplicitType) {
+      // Sem escopo (comportamento de sempre) ou tipo já escolhido manualmente:
+      // repassa direto pra paginação nativa da Auvo, mais barato.
+      return provider.listTasks(params);
+    }
+    // Escopo "rotina" resolve sempre pra exatamente 1 taskTypeId — assim que
+    // o catálogo souber esse id, a auditoria dessa página também pagina
+    // nativamente (rápida de verdade). "chamados" (vários ids) nunca cai
+    // aqui: a Auvo só pagina "1 tipo por vez", não "tipo A ou B ou C" numa
+    // chamada só — precisa do caminho de baixo mesmo.
+    const resolved = await resolveScopeTaskTypeIds(db, params.scope);
+    if (resolved.resolved && resolved.ids.length === 1) {
+      return provider.listTasks({ ...params, taskTypeId: resolved.ids[0] });
+    }
   }
 
-  const { tasks } = await fetchTasksForRange(provider, params);
+  const { tasks } = await fetchTasksForRange(db, provider, params);
   const start = (params.page - 1) * params.pageSize;
 
   return {

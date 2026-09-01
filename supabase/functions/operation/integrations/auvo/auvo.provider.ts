@@ -3,6 +3,7 @@ import { IntegrationProvider, ProviderHealth, Task, TaskFilters, TaskListParams,
 import { normalizeAuvoTask } from "./auvo.normalizer.ts";
 import { listTasksRaw, countTasksRaw, getTaskByIdRaw, AuvoParamFilter, AuvoCredentials } from "./auvo.client.ts";
 import { ControlledError } from "../../shared/http.ts";
+import { recordTaskTypeSightings } from "../../service/taskTypeCatalog.ts";
 
 export function readCredentials(): AuvoCredentials {
   const apiKey = Deno.env.get("AUVO_API_KEY");
@@ -54,8 +55,15 @@ export function createAuvoProvider(db: SupabaseClient): IntegrationProvider {
         pageSize: params.pageSize,
       });
 
+      const items = entityList.map(normalizeAuvoTask);
+      // Alimenta o catálogo taskTypeName→taskTypeId (ver taskTypeCatalog.ts)
+      // com qualquer tipo visto nesta página — de graça, já que os dados já
+      // vieram; é isso que deixa as páginas "Chamados"/"Abastecimento
+      // Rotina" cada vez mais rápidas com o uso normal do sistema.
+      await recordTaskTypeSightings(db, items);
+
       return {
-        items: entityList.map(normalizeAuvoTask),
+        items,
         total: totalItems,
         page: params.page,
         pageSize: params.pageSize,

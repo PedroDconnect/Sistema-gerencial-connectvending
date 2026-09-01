@@ -40,7 +40,7 @@ export function Sidebar({ active, onNavigate }) {
           <Icon name="bolt" size={20} />
         </span>
         <div>
-          <div className="sidebar__title">CEO</div>
+          <div className="sidebar__title">Painel Gerencial</div>
           <div className="sidebar__subtitle">Dashboard Executivo</div>
         </div>
       </div>

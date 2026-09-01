@@ -76,7 +76,8 @@ export const navItems = [
     label: "Operação",
     icon: "gear",
     children: [
-      { id: "operacao-tarefas", label: "Tarefas", icon: "clipboard" },
+      { id: "operacao-chamados", label: "Chamados", icon: "clipboard" },
+      { id: "operacao-rotina", label: "Abastecimento Rotina", icon: "box" },
       { id: "telemetria", label: "Telemetria", icon: "bolt" },
       { id: "operacao-completa", label: "Operação Completa", icon: "layers" },
     ],

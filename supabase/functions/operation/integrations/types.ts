@@ -40,6 +40,11 @@ export interface TaskFilters {
   // OperationService sobre tarefas reais (ver classifyDailyTypeCategory).
   // Alimenta o botão "Visualizar" das métricas do dia.
   typeCategory?: string;
+  // Separa as páginas "Chamados" (tudo, exceto abastecimento de rotina) e
+  // "Abastecimento Rotina" — nunca enviado à Auvo como está (vira 1+
+  // taskTypeId reais quando o catálogo já resolveu, ver
+  // fetchTasksForRange/taskTypeCatalog.ts).
+  scope?: "chamados" | "rotina";
 }
 
 export interface TaskListParams extends TaskFilters {

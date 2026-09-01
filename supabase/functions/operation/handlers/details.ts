@@ -11,6 +11,6 @@ import { jsonResponse } from "../shared/http.ts";
 export async function handleDetails(db: SupabaseClient, url: URL): Promise<Response> {
   const filters = parseTaskFilters(url.searchParams);
   const provider = createAuvoProvider(db);
-  const result = await getOverview(provider, filters);
+  const result = await getOverview(db, provider, filters);
   return jsonResponse(result);
 }

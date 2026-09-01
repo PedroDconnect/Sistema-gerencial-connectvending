@@ -8,6 +8,6 @@ export async function handleTasks(db: SupabaseClient, url: URL): Promise<Respons
   const filters = parseTaskFilters(url.searchParams);
   const { page, pageSize } = parsePagination(url.searchParams);
   const provider = createAuvoProvider(db);
-  const result = await getTasksPage(provider, { ...filters, page, pageSize });
+  const result = await getTasksPage(db, provider, { ...filters, page, pageSize });
   return jsonResponse(result);
 }
