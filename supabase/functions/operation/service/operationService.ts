@@ -142,9 +142,110 @@ async function fetchAllForProviderFilters(
   return { tasks: items, incomplete };
 }
 
-function fetchAllCached(provider: IntegrationProvider, providerFilters: TaskFilters): Promise<PageFetchResult> {
+// Decisão de 01/09/2026: o módulo Operação era propositalmente 100% ao
+// vivo (ver comentário antigo em index.ts) — funciona bem pra "Chamados"
+// (pouco volume), mas "Abastecimento Rotina" sozinho passa de 900
+// tarefas/dia (10 páginas), e confirmado ao vivo que um dia instável da
+// Auvo não deixa isso completar de forma confiável dentro do orçamento da
+// Function, não importa quanto se aumente o prazo. Persiste o resultado
+// em operational_snapshot_cache (mesma tabela/lock genérico já usado por
+// VMpay e pelo registry Auvo×VMpay) — só quem ganha o claim busca de
+// verdade na Auvo; quem não ganha lê o que já está salvo, mesmo que
+// velho, em vez de competir pelo mesmo orçamento de tempo/concorrência.
+//
+// TTL de 15 min (bem mais que os ~10 min do Modo Apresentação de
+// propósito): a cada leitura dentro da janela, "renova o relógio" (ver
+// touchTasksCache) — enquanto alguém continuar abrindo a tela com
+// alguma frequência, o cache nunca fica velho o bastante pra precisar
+// buscar de novo; só recalcula de verdade se ninguém ler por mais que
+// isso (ex.: filtro/período que ninguém está olhando agora).
+const TASKS_CACHE_TTL_SECONDS = 900;
+// Um pouco acima de FETCH_DEADLINE_MS (130s) — nunca pode ser menor que
+// o tempo que o cálculo de verdade pode levar, senão uma segunda
+// requisição reivindicaria de novo achando que a primeira travou.
+const TASKS_CACHE_CLAIM_TTL_SECONDS = 150;
+
+interface TasksCacheRow {
+  generated_at: string | null;
+  payload: PageFetchResult | null;
+}
+
+async function readTasksCache(db: SupabaseClient, cacheKey: string): Promise<TasksCacheRow | null> {
+  const { data } = await db
+    .from("operational_snapshot_cache")
+    .select("generated_at, payload")
+    .eq("cache_key", cacheKey)
+    .maybeSingle();
+  return (data as TasksCacheRow) ?? null;
+}
+
+async function touchTasksCache(db: SupabaseClient, cacheKey: string): Promise<void> {
+  try {
+    await db.from("operational_snapshot_cache").update({ generated_at: new Date().toISOString() }).eq("cache_key", cacheKey);
+  } catch {
+    // Best-effort: se falhar, o próximo request só recalcula um pouco
+    // mais cedo do que precisaria — não é um erro real pra quem está lendo agora.
+  }
+}
+
+async function writeTasksCache(db: SupabaseClient, cacheKey: string, result: PageFetchResult): Promise<void> {
+  await db.from("operational_snapshot_cache").upsert({
+    cache_key: cacheKey,
+    generated_at: new Date().toISOString(),
+    payload: result,
+    data_incomplete: result.incomplete,
+    refresh_claimed_at: null,
+    last_error: null,
+    last_error_at: null,
+    updated_at: new Date().toISOString(),
+  });
+}
+
+async function fetchTasksPersisted(
+  db: SupabaseClient,
+  cacheKey: string,
+  compute: () => Promise<PageFetchResult>
+): Promise<PageFetchResult> {
+  const cached = await readTasksCache(db, cacheKey);
+  const isFresh = Boolean(
+    cached?.generated_at && Date.now() - new Date(cached.generated_at).getTime() < TASKS_CACHE_TTL_SECONDS * 1000
+  );
+
+  if (isFresh && cached?.payload) {
+    await touchTasksCache(db, cacheKey);
+    return cached.payload;
+  }
+
+  const { data: claimed } = await db.rpc("claim_snapshot_refresh", {
+    p_cache_key: cacheKey,
+    p_claim_ttl_seconds: TASKS_CACHE_CLAIM_TTL_SECONDS,
+  });
+  const wonClaim = Array.isArray(claimed) ? claimed.length > 0 : Boolean(claimed);
+
+  if (!wonClaim && cached?.payload) {
+    // Outra requisição já está recalculando — devolve o que já está salvo
+    // (mesmo que velho) em vez de competir pelo mesmo orçamento de
+    // tempo/concorrência da Auvo com ela (é leitura de dashboard, não
+    // precisa do dado do segundo exato).
+    return cached.payload;
+  }
+
+  try {
+    const result = await compute();
+    await writeTasksCache(db, cacheKey, result);
+    return result;
+  } catch (error) {
+    await db.rpc("release_snapshot_refresh_claim", { p_cache_key: cacheKey });
+    if (cached?.payload) return cached.payload;
+    throw error;
+  }
+}
+
+function fetchAllCached(db: SupabaseClient, provider: IntegrationProvider, providerFilters: TaskFilters): Promise<PageFetchResult> {
   const cacheKey = `operation-tasks:${JSON.stringify(providerFilters)}`;
-  return getOrSet(cacheKey, SHARED_FETCH_TTL_MS, () => fetchAllForProviderFilters(provider, providerFilters));
+  return getOrSet(cacheKey, SHARED_FETCH_TTL_MS, () =>
+    fetchTasksPersisted(db, cacheKey, () => fetchAllForProviderFilters(provider, providerFilters))
+  );
 }
 
 // Caminho rápido de "Chamados"/"Abastecimento Rotina" quando o catálogo já
@@ -157,12 +258,14 @@ function fetchAllCached(provider: IntegrationProvider, providerFilters: TaskFilt
 // verdade entram todas numa fila só, puxada por até AUVO_CONCURRENCY_LIMIT
 // workers no total, não por tipo.
 async function fetchAllForTypeIdsCached(
+  db: SupabaseClient,
   provider: IntegrationProvider,
   providerFilters: TaskFilters,
   taskTypeIds: number[]
 ): Promise<PageFetchResult> {
   const cacheKey = `operation-tasks-multi:${JSON.stringify({ ...providerFilters, taskTypeIds: [...taskTypeIds].sort() })}`;
-  return getOrSet(cacheKey, SHARED_FETCH_TTL_MS, async () => {
+  return getOrSet(cacheKey, SHARED_FETCH_TTL_MS, () =>
+    fetchTasksPersisted(db, cacheKey, async () => {
     const deadlineAt = Date.now() + FETCH_DEADLINE_MS;
     const countDeadlineAt = Math.min(deadlineAt, Date.now() + COUNT_BUDGET_MS);
 
@@ -217,7 +320,8 @@ async function fetchAllForTypeIdsCached(
     await Promise.all(Array.from({ length: workerCount }, worker));
 
     return { tasks: items, incomplete };
-  });
+    })
+  );
 }
 
 // "rotina" é 1 nome fixo só ("Abastecimento Rotina") — "resolved" exige
@@ -281,7 +385,7 @@ async function fetchTasksForRange(
     // Auvo, num pool de concorrência compartilhado (ver
     // fetchAllForTypeIdsCached) — nunca baixa o período inteiro só pra
     // descartar metade depois.
-    const result = await fetchAllForTypeIdsCached(provider, providerFilters, resolved.ids);
+    const result = await fetchAllForTypeIdsCached(db, provider, providerFilters, resolved.ids);
     tasks = result.tasks;
     incomplete = result.incomplete;
   } else {
@@ -290,7 +394,7 @@ async function fetchTasksForRange(
     // sempre: busca o período inteiro e separa por nome aqui. Essa mesma
     // busca completa realimenta o catálogo (ver auvo.provider.ts), então
     // o próximo request tende a já usar o caminho rápido.
-    const full = await fetchAllCached(provider, providerFilters);
+    const full = await fetchAllCached(db, provider, providerFilters);
     tasks =
       scope && !hasExplicitType
         ? full.tasks.filter((t) =>
