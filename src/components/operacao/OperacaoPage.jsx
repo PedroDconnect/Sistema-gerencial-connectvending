@@ -198,7 +198,7 @@ export function OperacaoPage({ scope }) {
         />
       )}
 
-      <section className="operacao-kpi-grid">
+      <section className="operacao-kpi-grid operacao-kpi-grid--compact">
         {summary.loading ? (
           <div className="stat-tile stat-tile--skeleton" />
         ) : (
@@ -206,17 +206,18 @@ export function OperacaoPage({ scope }) {
         )}
 
         {details.loading
-          ? Array.from({ length: 5 }).map((_, i) => <div key={i} className="stat-tile stat-tile--skeleton" />)
+          ? Array.from({ length: 2 }).map((_, i) => <div key={i} className="stat-tile stat-tile--skeleton" />)
           : [
-              // Mesma regra já usada no badge de status da Auditoria
-              // (taskStatusBadgeVariant): só "Concluídas" é verde, todo o
-              // resto ainda não terminou e é vermelho — sem estágio
-              // intermediário neutro, pra ler de longe (modo apresentação).
-              { label: "Concluídas", value: details.data?.finished ?? 0, tone: "success" },
-              { label: "Em andamento", value: details.data?.checkedIn ?? 0, tone: "danger" },
-              { label: "Em deslocamento", value: details.data?.inDisplacement ?? 0, tone: "danger" },
-              { label: "Abertas", value: details.data?.opened ?? 0, tone: "danger" },
-              { label: "Atenção", value: details.data?.paused ?? 0, tone: "danger" },
+              // Simplificado a pedido: só importa terminou ou não — os
+              // status intermediários da Auvo (em deslocamento, em
+              // atendimento, check-out, pausada) todos contam como "Em
+              // aberto" aqui (mesmo princípio de StatusBreakdown).
+              { label: "Finalizadas", value: details.data?.finished ?? 0, tone: "success" },
+              {
+                label: "Em aberto",
+                value: Math.max((details.data?.total ?? 0) - (details.data?.finished ?? 0), 0),
+                tone: "danger",
+              },
             ].map((tile) => (
               <StatTile
                 key={tile.label}

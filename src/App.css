@@ -1588,6 +1588,13 @@
   grid-template-columns: repeat(6, 1fr);
   gap: 16px;
 }
+/* Menos KPIs (Chamados, simplificado pra só Finalizadas/Em aberto) — não
+   mexe na grade de 6 colunas usada por Operação Completa/Telemetria. Nos
+   dois breakpoints menores (1400px/900px) a grade base já cai pra 3/2
+   colunas, o que já serve bem pra só 3 tiles, sem precisar de override. */
+.operacao-kpi-grid--compact {
+  grid-template-columns: repeat(3, 1fr);
+}
 .operacao-completion-rate {
   font-size: 13px;
   color: var(--text-secondary);
@@ -1826,6 +1833,11 @@
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 16px;
+}
+.operacao-breakdown-table__rank {
+  color: var(--text-muted);
+  font-weight: 600;
+  width: 32px;
 }
 
 .operacao-audit__page-size {
