@@ -139,6 +139,79 @@ function fetchAllCached(provider: IntegrationProvider, providerFilters: TaskFilt
   return getOrSet(cacheKey, SHARED_FETCH_TTL_MS, () => fetchAllForProviderFilters(provider, providerFilters));
 }
 
+// Caminho rápido de "Chamados"/"Abastecimento Rotina" quando o catálogo já
+// resolveu 1+ taskTypeId: busca cada tipo direto na Auvo, mas TODOS
+// dividindo um único pool de AUVO_CONCURRENCY_LIMIT requisições simultâneas
+// — nunca um pool de 8 por tipo (6 tipos × 8 = 48 ao mesmo tempo
+// estouraria de longe o limite empiricamente seguro documentado em
+// auvo.config.ts, que já derruba a própria Auvo a partir de ~16). Contagem
+// de cada tipo é feita em paralelo (leve, pageSize=1); as páginas de
+// verdade entram todas numa fila só, puxada por até AUVO_CONCURRENCY_LIMIT
+// workers no total, não por tipo.
+async function fetchAllForTypeIdsCached(
+  provider: IntegrationProvider,
+  providerFilters: TaskFilters,
+  taskTypeIds: number[]
+): Promise<PageFetchResult> {
+  const cacheKey = `operation-tasks-multi:${JSON.stringify({ ...providerFilters, taskTypeIds: [...taskTypeIds].sort() })}`;
+  return getOrSet(cacheKey, SHARED_FETCH_TTL_MS, async () => {
+    const deadlineAt = Date.now() + FETCH_DEADLINE_MS;
+    const countDeadlineAt = Math.min(deadlineAt, Date.now() + COUNT_BUDGET_MS);
+
+    const counts = await Promise.all(
+      taskTypeIds.map((taskTypeId) =>
+        withDeadline(countDeadlineAt, () => provider.countTasks({ ...providerFilters, taskTypeId }).catch(() => -1))
+      )
+    );
+
+    let anyCountFailed = false;
+    let totalAcrossTypes = 0;
+    const jobs: Array<{ taskTypeId: number; page: number }> = [];
+
+    taskTypeIds.forEach((taskTypeId, i) => {
+      const total = counts[i];
+      if (total === null || total === -1) {
+        anyCountFailed = true;
+        return;
+      }
+      totalAcrossTypes += total;
+      if (total === 0) return;
+      const pages = Math.min(Math.ceil(total / AGGREGATION_PAGE_SIZE), AGGREGATION_MAX_PAGES);
+      for (let page = 1; page <= pages; page++) jobs.push({ taskTypeId, page });
+    });
+
+    if (totalAcrossTypes > AGGREGATION_SAFE_LIMIT) {
+      throw new ControlledError("Período amplo. Refine os filtros para realizar uma auditoria.", 422);
+    }
+
+    const items: Task[] = [];
+    let incomplete = anyCountFailed;
+    let cursor = 0;
+
+    async function worker() {
+      while (cursor < jobs.length) {
+        if (remainingMs(deadlineAt) <= 0) {
+          incomplete = true;
+          return;
+        }
+        const job = jobs[cursor++];
+        const result = await withDeadline(deadlineAt, () =>
+          provider
+            .listTasks({ ...providerFilters, taskTypeId: job.taskTypeId, page: job.page, pageSize: AGGREGATION_PAGE_SIZE })
+            .catch(() => null)
+        );
+        if (result) items.push(...result.items);
+        else incomplete = true;
+      }
+    }
+
+    const workerCount = Math.min(Math.max(AUVO_CONCURRENCY_LIMIT, 1), jobs.length || 1);
+    await Promise.all(Array.from({ length: workerCount }, worker));
+
+    return { tasks: items, incomplete };
+  });
+}
+
 // "rotina" é 1 nome fixo só ("Abastecimento Rotina") — "resolved" exige
 // esse único id já conhecido, sem o quê a Auvo não tem como filtrar.
 //
@@ -196,15 +269,13 @@ async function fetchTasksForRange(
   let incomplete: boolean;
 
   if (resolved && resolved.resolved && resolved.ids.length > 0) {
-    // Caminho rápido: 1 busca por taskTypeId já conhecido, direto na Auvo
-    // (cada uma com sua própria cache/paginação/prazo — ver
-    // fetchAllCached) — nunca baixa o período inteiro só pra descartar
-    // metade depois.
-    const perType = await Promise.all(
-      resolved.ids.map((taskTypeId) => fetchAllCached(provider, { ...providerFilters, taskTypeId }))
-    );
-    tasks = perType.flatMap((r) => r.tasks);
-    incomplete = perType.some((r) => r.incomplete);
+    // Caminho rápido: busca só o(s) taskTypeId já conhecido(s) direto na
+    // Auvo, num pool de concorrência compartilhado (ver
+    // fetchAllForTypeIdsCached) — nunca baixa o período inteiro só pra
+    // descartar metade depois.
+    const result = await fetchAllForTypeIdsCached(provider, providerFilters, resolved.ids);
+    tasks = result.tasks;
+    incomplete = result.incomplete;
   } else {
     // Catálogo ainda não resolveu todos os tipos do escopo (recém
     // implantado, ou um tipo sem nenhuma tarefa ainda) — cai no caminho de
