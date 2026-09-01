@@ -13,6 +13,7 @@ import { TaskDetailDrawer } from "./TaskDetailDrawer";
 import { useOperacaoSummary } from "../../hooks/useOperacaoSummary";
 import { useOperacaoDetails } from "../../hooks/useOperacaoDetails";
 import { useOperacaoTasks } from "../../hooks/useOperacaoTasks";
+import { usePresentationMode } from "../../hooks/usePresentationMode";
 import { formatPercent } from "../../services/operacaoService";
 
 const EMPTY_FILTERS = {
@@ -99,6 +100,8 @@ export function OperacaoPage({ scope }) {
     tasks.refetch();
   }
 
+  const presentation = usePresentationMode(refreshAll);
+
   const anyError = details.error ?? summary.error;
   // /summary é um único request leve e confiável; /details busca as
   // tarefas de verdade e pode voltar incompleto num dia de Auvo instável
@@ -126,18 +129,38 @@ export function OperacaoPage({ scope }) {
           <h1 className="topbar__title">{meta.title}</h1>
           <p className="topbar__subtitle">{meta.subtitle}</p>
         </div>
-        <div className="topbar__actions">
-          {details.data && (
-            <span className="ativos-page__sync">
-              Última atualização: {new Date(details.data.generatedAt).toLocaleTimeString("pt-BR")}
-            </span>
-          )}
-          <button type="button" className="btn btn--ghost" onClick={refreshAll}>
-            <Icon name="refresh" size={16} />
-            Atualizar dados
+        {!presentation.active && (
+          <div className="topbar__actions">
+            {details.data && (
+              <span className="ativos-page__sync">
+                Última atualização: {new Date(details.data.generatedAt).toLocaleTimeString("pt-BR")}
+              </span>
+            )}
+            <button type="button" className="btn btn--ghost" onClick={refreshAll}>
+              <Icon name="refresh" size={16} />
+              Atualizar dados
+            </button>
+            <button type="button" className="btn btn--ghost" onClick={presentation.enter}>
+              <Icon name="expand" size={16} />
+              Modo Apresentação
+            </button>
+          </div>
+        )}
+      </header>
+
+      {presentation.active && (
+        <div className="presentation-banner">
+          <span className="presentation-banner__label">Modo Apresentação</span>
+          <span className="presentation-banner__hint">
+            Atualiza sozinho a cada 10 min
+            {details.data && ` · Última atualização: ${new Date(details.data.generatedAt).toLocaleTimeString("pt-BR")}`}
+          </span>
+          <button type="button" className="btn btn--ghost" onClick={presentation.exit}>
+            <Icon name="close" size={16} />
+            Sair
           </button>
         </div>
-      </header>
+      )}
 
       {anyError && (
         <div className="state-error-block">
@@ -163,15 +186,17 @@ export function OperacaoPage({ scope }) {
         </div>
       )}
 
-      <OperacaoFilters
-        filters={filters}
-        onChange={handleFilterChange}
-        onClear={handleClearFilters}
-        technicianOptions={byTechnician}
-        customerOptions={byCustomer}
-        typeOptions={byType}
-        scope={scope}
-      />
+      {!presentation.active && (
+        <OperacaoFilters
+          filters={filters}
+          onChange={handleFilterChange}
+          onClear={handleClearFilters}
+          technicianOptions={byTechnician}
+          customerOptions={byCustomer}
+          typeOptions={byType}
+          scope={scope}
+        />
+      )}
 
       <section className="operacao-kpi-grid">
         {summary.loading ? (
@@ -183,9 +208,13 @@ export function OperacaoPage({ scope }) {
         {details.loading
           ? Array.from({ length: 5 }).map((_, i) => <div key={i} className="stat-tile stat-tile--skeleton" />)
           : [
-              { label: "Concluídas", value: details.data?.finished ?? 0 },
-              { label: "Em andamento", value: details.data?.checkedIn ?? 0 },
-              { label: "Em deslocamento", value: details.data?.inDisplacement ?? 0 },
+              // Mesma regra já usada no badge de status da Auditoria
+              // (taskStatusBadgeVariant): só "Concluídas" é verde, todo o
+              // resto ainda não terminou e é vermelho — sem estágio
+              // intermediário neutro, pra ler de longe (modo apresentação).
+              { label: "Concluídas", value: details.data?.finished ?? 0, tone: "success" },
+              { label: "Em andamento", value: details.data?.checkedIn ?? 0, tone: "danger" },
+              { label: "Em deslocamento", value: details.data?.inDisplacement ?? 0, tone: "danger" },
               { label: "Abertas", value: details.data?.opened ?? 0, tone: "danger" },
               { label: "Atenção", value: details.data?.paused ?? 0, tone: "danger" },
             ].map((tile) => (
@@ -194,6 +223,7 @@ export function OperacaoPage({ scope }) {
                 label={tile.label}
                 value={isDetailsIncomplete ? "—" : tile.value.toLocaleString("pt-BR")}
                 tone={isDetailsIncomplete ? undefined : tile.tone}
+                strong
               />
             ))}
       </section>

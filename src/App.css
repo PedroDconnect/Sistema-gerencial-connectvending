@@ -346,6 +346,27 @@
   gap: 10px;
 }
 
+.presentation-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  background: var(--accent-soft);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-md);
+  padding: 10px 16px;
+}
+.presentation-banner__label {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+.presentation-banner__hint {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
 .icon-btn {
   position: relative;
   width: 38px;
@@ -900,6 +921,19 @@
 }
 .stat-tile__value--danger {
   color: var(--status-critical);
+}
+.stat-tile__value--success {
+  color: var(--status-good);
+}
+/* Cartão inteiro em destaque (ver prop "strong" de StatTile) — fundo
+   suave + borda na cor do tom, pra ler o KPI de longe (modo apresentação). */
+.stat-tile--success {
+  background: var(--status-good-soft);
+  border-color: var(--status-good);
+}
+.stat-tile--danger {
+  background: var(--status-critical-soft);
+  border-color: var(--status-critical);
 }
 .stat-tile--skeleton {
   min-height: 78px;

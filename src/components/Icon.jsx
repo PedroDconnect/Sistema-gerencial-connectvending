@@ -29,6 +29,7 @@ const paths = {
   pin: "M12 21s7-6.3 7-11.5A7 7 0 0 0 5 9.5C5 14.7 12 21 12 21Zm0-9a2.3 2.3 0 1 0 0-4.6A2.3 2.3 0 0 0 12 12Z",
   layers: "m12 3 9 5-9 5-9-5 9-5Zm-9 9 9 5 9-5M3 16l9 5 9-5",
   clipboard: "M9 3h6a1 1 0 0 1 1 1v1h1a2 2 0 0 1 2 2v13a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h1V4a1 1 0 0 1 1-1Zm0 4v0M9 12h6M9 16h6",
+  expand: "M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5",
 };
 
 export function Icon({ name, size = 18, strokeWidth = 1.8, className }) {

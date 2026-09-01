@@ -37,6 +37,10 @@
   --status-warning: #B8862E;
   --status-serious: #C1703F;
   --status-critical: #B5533F;
+  /* Fundo suave dos mesmos tons — cards de KPI em destaque (modo
+     apresentação), mesmo espírito de --accent-soft */
+  --status-good-soft: rgba(63, 143, 92, 0.14);
+  --status-critical-soft: rgba(181, 83, 63, 0.14);
 
   /* Chart chrome */
   --grid-hairline: #E6E1D5;
@@ -87,6 +91,8 @@
     --status-warning: #D6A445;
     --status-serious: #D6825A;
     --status-critical: #D6725D;
+    --status-good-soft: rgba(79, 174, 114, 0.2);
+    --status-critical-soft: rgba(214, 114, 93, 0.2);
 
     --grid-hairline: #32362A;
     --axis-muted: #656A5C;
