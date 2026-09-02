@@ -5,7 +5,7 @@ import { createAdminUser, updateAdminUser, deleteAdminUser } from "../../lib/adm
 import { ASSIGNABLE_MODULES } from "../../data/mockData";
 
 function ModulesCell({ role, modules }) {
-  if (role === "admin") return <span className="badge badge--info">Todos (admin)</span>;
+  if (role === "admin") return <span className="badge badge--elevated">Todos (admin)</span>;
   if (!modules || modules.length === 0) return <span className="badge badge--neutral">Nenhum</span>;
   const labels = modules.map((id) => ASSIGNABLE_MODULES.find((m) => m.id === id)?.label ?? id);
   return (
@@ -219,7 +219,7 @@ export function AdminUsersPage() {
                   <tr key={u.id}>
                     <td className="k">{u.email}</td>
                     <td>
-                      <span className={`badge badge--${u.role === "admin" ? "info" : "neutral"}`}>
+                      <span className={`badge badge--${u.role === "admin" ? "elevated" : "neutral"}`}>
                         {u.role === "admin" ? "Administrador" : "Usuário"}
                       </span>
                     </td>

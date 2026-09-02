@@ -1,6 +1,5 @@
 import { useState } from "react";
 import { useAuth } from "../context/AuthContext";
-import { Icon } from "./Icon";
 
 export function Login() {
   const { signIn } = useAuth();
@@ -22,7 +21,7 @@ export function Login() {
     <div className="login-screen">
       <form className="login-card" onSubmit={handleSubmit}>
         <span className="sidebar__logo login-card__logo">
-          <Icon name="bolt" size={20} />
+          <img src="/favicon.svg" alt="Connect Vending" />
         </span>
         <h1 className="login-card__title">Painel Gerencial</h1>
         <p className="login-card__subtitle">Entre com sua conta para acessar o dashboard executivo.</p>

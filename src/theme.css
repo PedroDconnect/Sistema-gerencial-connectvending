@@ -1,9 +1,19 @@
+/* Paleta oficial da marca (apresentação institucional, abr/2026):
+     Grafite Quente   #2E2E2C — ink / superfície escura de peso
+     Oliva Mineral    #6F7663 — accent único de marca/interação
+     Taupe            #B7AEA2 — neutro quente intermediário
+     Cinza Claro      #E2E0DB — superfície neutra (sidebar)
+     Off-white        #F4F1EC — fundo base
+     Violeta Profundo #432534 — usado com parcimônia (ver --brand-violet,
+                                 badge de Administrador em AdminUsersPage)
+   Mapeada nos tokens abaixo — nomes dos tokens preservados (não é 1:1 por
+   nome) pra não exigir find-replace em todo o CSS existente. */
 :root {
   color-scheme: light;
 
   /* Surfaces */
   --page-bg: #F4F1EC;
-  --sidebar-bg: #EFEAE1;
+  --sidebar-bg: #E2E0DB;
   --card-bg: #FFFFFF;
   --card-bg-raised: #EDEAE1;
   --input-bg: #F9F8F5;
@@ -11,7 +21,7 @@
   --border-hairline-strong: #CBC9BC;
 
   /* Ink */
-  --text-primary: #252822;
+  --text-primary: #2E2E2C;
   --text-secondary: #6B6E67;
   --text-muted: #8B8E85;
   --text-faint: #ACAFA6;
@@ -21,6 +31,12 @@
   --accent-hover: #5B6353;
   --accent-active: #454A3D;
   --accent-soft: rgba(111, 118, 99, 0.14);
+
+  /* Violeta Profundo — não é cor de interação, só um destaque raro pra
+     marcar algo "elevado" (hoje: papel de Administrador). Nunca usar em
+     botão/link — pra isso é --accent. */
+  --brand-violet: #432534;
+  --brand-violet-soft: rgba(67, 37, 52, 0.14);
 
   /* Categorical (mesma família terrosa, ordem fixa — ver dataviz palette) */
   --series-blue: #5C7B8A;
@@ -60,11 +76,15 @@
   :root:not([data-theme="light"]) {
     color-scheme: dark;
 
-    --page-bg: #1B1D17;
-    --sidebar-bg: #1F221B;
-    --card-bg: #22251D;
-    --card-bg-raised: #2A2E24;
-    --input-bg: #2A2E24;
+    /* Ancorado em Grafite Quente (#2E2E2C, ver comentário no :root claro)
+       em vez do preto-oliva antigo sem lastro na paleta oficial — mesmo
+       degrade page < sidebar < card < raised de antes, só recalculado a
+       partir do tom da marca. */
+    --page-bg: #242422;
+    --sidebar-bg: #292926;
+    --card-bg: #2E2E2C;
+    --card-bg-raised: #363633;
+    --input-bg: #363633;
     --border-hairline: rgba(244, 241, 236, 0.08);
     --border-hairline-strong: rgba(244, 241, 236, 0.14);
 
@@ -77,6 +97,9 @@
     --accent-hover: #96A184;
     --accent-active: #4B5043;
     --accent-soft: rgba(126, 136, 112, 0.2);
+
+    --brand-violet: #8C5F72;
+    --brand-violet-soft: rgba(140, 95, 114, 0.22);
 
     --series-blue: #7594A2;
     --series-orange: #CE9760;
@@ -105,10 +128,11 @@
 :root[data-theme="dark"] {
   color-scheme: dark;
 
-  --page-bg: #1B1D17;
-  --sidebar-bg: #1F221B;
-  --card-bg: #22251D;
-  --card-bg-raised: #2A2E24;
+  --page-bg: #242422;
+  --sidebar-bg: #292926;
+  --card-bg: #2E2E2C;
+  --card-bg-raised: #363633;
+  --input-bg: #363633;
   --border-hairline: rgba(244, 241, 236, 0.08);
   --border-hairline-strong: rgba(244, 241, 236, 0.14);
 
@@ -121,6 +145,9 @@
   --accent-hover: #96A184;
   --accent-active: #4B5043;
   --accent-soft: rgba(126, 136, 112, 0.2);
+
+  --brand-violet: #8C5F72;
+  --brand-violet-soft: rgba(140, 95, 114, 0.22);
 
   --series-blue: #7594A2;
   --series-orange: #CE9760;

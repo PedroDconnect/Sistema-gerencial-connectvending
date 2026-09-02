@@ -54,7 +54,7 @@ export function Sidebar({ active, onNavigate, collapsed = false, onToggleCollaps
     <aside className={`sidebar ${collapsed ? "sidebar--collapsed" : ""}`}>
       <div className="sidebar__brand">
         <span className="sidebar__logo">
-          <Icon name="bolt" size={20} />
+          <img src="/favicon.svg" alt="Connect Vending" />
         </span>
         <div className="sidebar__brand-text">
           <div className="sidebar__title">Painel Gerencial</div>
