@@ -1,0 +1,91 @@
+import { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { login } from "./auvo.auth.ts";
+import {
+  AUVO_CLAIM_TTL_SECONDS,
+  AUVO_CLAIM_POLL_INTERVAL_MS,
+  AUVO_CLAIM_POLL_MAX_ATTEMPTS,
+  AUVO_TOKEN_SAFETY_MARGIN_MS,
+} from "./auvo.config.ts";
+import { logEvent } from "../../shared/logger.ts";
+
+const PROVIDER = "auvo";
+
+// Duplicado ao pé da letra de operation/integrations/auvo/auvo.tokenManager.ts
+// — mesmo provider, mesma tabela integration_tokens, mesmo lock
+// single-flight (claim_token_refresh/release_token_refresh_claim, já
+// existentes no schema.sql). Os dois módulos (operation e preparations)
+// compartilham o mesmo token cacheado em Postgres mesmo sem compartilhar
+// código — a chave é o provider ("auvo"), não qual function está rodando.
+interface TokenRow {
+  access_token: string | null;
+  expires_at: string | null;
+}
+
+function isValid(row: TokenRow | null | undefined): row is { access_token: string; expires_at: string } {
+  if (!row?.access_token || !row?.expires_at) return false;
+  return new Date(row.expires_at).getTime() - AUVO_TOKEN_SAFETY_MARGIN_MS > Date.now();
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function readToken(db: SupabaseClient): Promise<TokenRow | null> {
+  const { data } = await db.from("integration_tokens").select("access_token, expires_at").eq("provider", PROVIDER).maybeSingle();
+  return data ?? null;
+}
+
+async function performLogin(db: SupabaseClient, apiKey: string, apiToken: string): Promise<string> {
+  try {
+    const { accessToken, expiresAt } = await login(apiKey, apiToken);
+    await db
+      .from("integration_tokens")
+      .update({
+        access_token: accessToken,
+        expires_at: expiresAt,
+        refresh_claimed_at: null,
+        last_success_at: new Date().toISOString(),
+        last_error: null,
+        last_error_at: null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("provider", PROVIDER);
+    await logEvent(db, PROVIDER, "AUVO_LOGIN_SUCCESS", {});
+    return accessToken;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Falha desconhecida no login da Auvo.";
+    await db.from("integration_tokens").update({ last_error: message, last_error_at: new Date().toISOString() }).eq("provider", PROVIDER);
+    await db.rpc("release_token_refresh_claim", { p_provider: PROVIDER });
+    await logEvent(db, PROVIDER, "AUVO_LOGIN_FAILURE", { message });
+    throw new Error("Não foi possível autenticar com a Auvo.");
+  }
+}
+
+async function waitForFreshToken(db: SupabaseClient): Promise<string> {
+  for (let attempt = 0; attempt < AUVO_CLAIM_POLL_MAX_ATTEMPTS; attempt++) {
+    await sleep(AUVO_CLAIM_POLL_INTERVAL_MS);
+    const row = await readToken(db);
+    if (isValid(row)) return row.access_token;
+  }
+  throw new Error("Não foi possível autenticar com a Auvo.");
+}
+
+async function acquireToken(db: SupabaseClient, apiKey: string, apiToken: string): Promise<string> {
+  const { data: claimed } = await db.rpc("claim_token_refresh", { p_provider: PROVIDER, p_claim_ttl_seconds: AUVO_CLAIM_TTL_SECONDS });
+  const wonClaim = Array.isArray(claimed) ? claimed.length > 0 : Boolean(claimed);
+  if (wonClaim) {
+    await logEvent(db, PROVIDER, "AUVO_TOKEN_REFRESH", { wonClaim: true });
+    return performLogin(db, apiKey, apiToken);
+  }
+  return waitForFreshToken(db);
+}
+
+export async function getValidToken(db: SupabaseClient, apiKey: string, apiToken: string): Promise<string> {
+  const current = await readToken(db);
+  if (isValid(current)) return current.access_token;
+  return acquireToken(db, apiKey, apiToken);
+}
+
+export async function forceRefresh(db: SupabaseClient, apiKey: string, apiToken: string): Promise<string> {
+  return acquireToken(db, apiKey, apiToken);
+}
