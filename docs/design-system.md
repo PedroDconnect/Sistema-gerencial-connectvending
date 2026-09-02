@@ -20,18 +20,25 @@ claro/escuro: segue `prefers-color-scheme` por padrão, mas pode ser fixado
 explicitamente via `data-theme="dark"` ou `data-theme="light"` no `:root`
 (usado pelo seletor de tema do app).
 
+Desde 02/09/2026 os tokens claros seguem ao pé da letra a paleta oficial da
+marca (apresentação institucional, abr/2026): Off-white `#F4F1EC`, Grafite
+Quente `#2E2E2C`, Oliva Mineral `#6F7663`, Cinza Claro `#E2E0DB`, Taupe
+`#B7AEA2` e Violeta Profundo `#432534` (ver comentário no topo de
+`theme.css`). O modo escuro foi reancorado em Grafite Quente no lugar do
+preto-oliva anterior, que não vinha de nenhum valor documentado da marca.
+
 ### Superfícies e texto
 
 | Token | Claro | Escuro | Uso |
 |---|---|---|---|
-| `--page-bg` | `#F4F1EC` | `#1B1D17` | fundo da página |
-| `--sidebar-bg` | `#EFEAE1` | `#1F221B` | fundo da sidebar |
-| `--card-bg` | `#FFFFFF` | `#22251D` | fundo de cards/modais |
-| `--card-bg-raised` | `#EDEAE1` | `#2A2E24` | fundo "elevado" (inputs raised, badge neutro, hover) |
-| `--input-bg` | `#F9F8F5` | `#2A2E24` | fundo de inputs |
+| `--page-bg` | `#F4F1EC` | `#242422` | fundo da página |
+| `--sidebar-bg` | `#E2E0DB` | `#292926` | fundo da sidebar |
+| `--card-bg` | `#FFFFFF` | `#2E2E2C` | fundo de cards/modais |
+| `--card-bg-raised` | `#EDEAE1` | `#363633` | fundo "elevado" (inputs raised, badge neutro, hover) |
+| `--input-bg` | `#F9F8F5` | `#363633` | fundo de inputs |
 | `--border-hairline` | `#DDDCD5` | `rgba(244,241,236,.08)` | borda padrão |
 | `--border-hairline-strong` | `#CBC9BC` | `rgba(244,241,236,.14)` | borda de destaque (linha ativa em gráfico, cabeçalho de tabela) |
-| `--text-primary` | `#252822` | `#F4F1EC` | texto principal |
+| `--text-primary` | `#2E2E2C` | `#F4F1EC` | texto principal |
 | `--text-secondary` | `#6B6E67` | `#C9C7B9` | texto secundário |
 | `--text-muted` | `#8B8E85` | `#8F9385` | rótulos, legendas |
 | `--text-faint` | `#ACAFA6` | `#656A5C` | texto mais discreto (sublabels) |
@@ -49,6 +56,11 @@ ativo).
 | `--accent-hover` | `#5B6353` | `#96A184` |
 | `--accent-active` | `#454A3D` | `#4B5043` |
 | `--accent-soft` | `rgba(111,118,99,.14)` | `rgba(126,136,112,.2)` |
+
+`--brand-violet` (`#432534` claro / `#8C5F72` escuro) é o Violeta Profundo da
+paleta — **não** é uma cor de interação (nunca usar em botão/link, isso é
+`--accent`), é um destaque raro pra marcar algo "elevado". Único uso hoje:
+`badge--elevated`, no papel de Administrador em `AdminUsersPage.jsx`.
 
 ### Estados (sucesso / alerta / erro)
 
@@ -175,6 +187,9 @@ Operação Completa + Tarefas) — item pai com seta, filhos indentados.
 Recolhível pelo botão no topo (`.sidebar--collapsed`, estado persistido em
 `localStorage` via `useSidebarCollapsed`): vira um trilho de 64px só com
 ícones, e os grupos abrem como flyout no hover em vez do acordeão inline.
+A logomarca (`.sidebar__logo`, também reaproveitada em `.login-card__logo`
+na tela de login) é `public/favicon.svg` — o símbolo em espiral oficial,
+não um ícone genérico.
 
 **Header/Topbar** (`.topbar`): título + subtítulo à esquerda
 (`.topbar__title`/`.topbar__subtitle`), ações à direita (`.topbar__actions`) —
@@ -257,6 +272,7 @@ customizada por tela. Célula truncada com tooltip: `.ativos-table__truncate`
 .badge--danger    /* --status-critical */
 .badge--info      /* --accent / --accent-soft — neutro-mas-informativo */
 .badge--neutral   /* --text-muted / --card-bg-raised — realmente neutro */
+.badge--elevated  /* --brand-violet / --brand-violet-soft — reservado pro papel de Administrador */
 ```
 
 Regra de uso: `success/warning/danger` são sempre sobre um *estado de dado*
