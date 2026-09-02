@@ -1,4 +1,12 @@
+import { Select } from "../Select";
 import { PERIOD_PRESETS, TASK_STATUS_OPTIONS, SLA_FILTER_OPTIONS } from "../../services/operacaoService";
+
+// Select.jsx trabalha com {value, label}; byTechnician/byCustomer/byType
+// (ver OperacaoPage.jsx) vêm como {key, label} — só remapeia o nome do
+// campo, sem tocar na origem dos dados.
+function toSelectOptions(rows) {
+  return rows.map((row) => ({ value: row.key, label: row.label }));
+}
 
 export function OperacaoFilters({ filters, onChange, onClear, technicianOptions, customerOptions, typeOptions, scope }) {
   // Abastecimento Rotina é só 1 tipo (não passa por SLA — ver isSlaEligible
@@ -31,17 +39,14 @@ export function OperacaoFilters({ filters, onChange, onClear, technicianOptions,
         </div>
 
         {showSlaFilter && (
-          <label className="operacao-filters__field operacao-filters__field--sla">
-            <span>SLA</span>
-            <select value={filters.sla} onChange={(e) => onChange("sla", e.target.value)}>
-              <option value="">Todos os chamados</option>
-              {SLA_FILTER_OPTIONS.map((opt) => (
-                <option key={opt.value} value={opt.value}>
-                  {opt.label}
-                </option>
-              ))}
-            </select>
-          </label>
+          <Select
+            className="operacao-filters__field--sla"
+            label="SLA"
+            value={filters.sla}
+            onChange={(value) => onChange("sla", value)}
+            options={SLA_FILTER_OPTIONS}
+            placeholder="Todos os chamados"
+          />
         )}
       </div>
 
@@ -59,55 +64,30 @@ export function OperacaoFilters({ filters, onChange, onClear, technicianOptions,
       )}
 
       <div className="operacao-filters__selects">
-        <label className="operacao-filters__field">
-          <span>Status</span>
-          <select value={filters.status} onChange={(e) => onChange("status", e.target.value)}>
-            <option value="">Todos</option>
-            {TASK_STATUS_OPTIONS.map((opt) => (
-              <option key={opt.value} value={opt.value}>
-                {opt.label}
-              </option>
-            ))}
-          </select>
-        </label>
+        <Select label="Status" value={filters.status} onChange={(value) => onChange("status", value)} options={TASK_STATUS_OPTIONS} />
 
         {showTypeFilter && (
-          <label className="operacao-filters__field">
-            <span>Tipo de operação</span>
-            <select value={filters.type} onChange={(e) => onChange("type", e.target.value)}>
-              <option value="">Todos</option>
-              {typeOptions.map((opt) => (
-                <option key={opt.key} value={opt.key}>
-                  {opt.label}
-                </option>
-              ))}
-            </select>
-          </label>
+          <Select
+            label="Tipo de operação"
+            value={filters.type}
+            onChange={(value) => onChange("type", value)}
+            options={toSelectOptions(typeOptions)}
+          />
         )}
 
-        <label className="operacao-filters__field">
-          <span>Colaborador</span>
-          <select value={filters.technician} onChange={(e) => onChange("technician", e.target.value)}>
-            <option value="">Todos</option>
-            {technicianOptions.map((opt) => (
-              <option key={opt.key} value={opt.key}>
-                {opt.label}
-              </option>
-            ))}
-          </select>
-        </label>
+        <Select
+          label="Colaborador"
+          value={filters.technician}
+          onChange={(value) => onChange("technician", value)}
+          options={toSelectOptions(technicianOptions)}
+        />
 
-        <label className="operacao-filters__field">
-          <span>Cliente</span>
-          <select value={filters.customer} onChange={(e) => onChange("customer", e.target.value)}>
-            <option value="">Todos</option>
-            {customerOptions.map((opt) => (
-              <option key={opt.key} value={opt.key}>
-                {opt.label}
-              </option>
-            ))}
-          </select>
-        </label>
+        <Select
+          label="Cliente"
+          value={filters.customer}
+          onChange={(value) => onChange("customer", value)}
+          options={toSelectOptions(customerOptions)}
+        />
       </div>
 
       <div className="ativos-filters__actions">

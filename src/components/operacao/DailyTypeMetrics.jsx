@@ -3,7 +3,7 @@ import { Icon } from "../Icon";
 import { DailyTypeMetricModal } from "./DailyTypeMetricModal";
 import { sharePercent } from "../../services/operacaoService";
 
-export function DailyTypeMetrics({ metrics, loading, baseParams }) {
+export function DailyTypeMetrics({ metrics, loading, baseParams, customerTypeRows = [], customerTypeCategories = [] }) {
   const [openKey, setOpenKey] = useState(null);
   const openMetric = metrics.find((m) => m.key === openKey) ?? null;
 
@@ -49,7 +49,13 @@ export function DailyTypeMetrics({ metrics, loading, baseParams }) {
       </div>
 
       {openMetric && (
-        <DailyTypeMetricModal metric={openMetric} baseParams={baseParams} onClose={() => setOpenKey(null)} />
+        <DailyTypeMetricModal
+          metric={openMetric}
+          baseParams={baseParams}
+          customerTypeRows={customerTypeRows}
+          customerTypeCategories={customerTypeCategories}
+          onClose={() => setOpenKey(null)}
+        />
       )}
     </section>
   );

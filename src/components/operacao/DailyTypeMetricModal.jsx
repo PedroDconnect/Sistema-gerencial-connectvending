@@ -13,7 +13,7 @@ function formatTaskDate(value) {
 // lista de tarefas de UM cliente, com o link de O.S.) só é buscado quando
 // o usuário abre aquela linha — reaproveita o filtro typeCategory+customer
 // que já existe em /tasks, sem endpoint novo.
-export function DailyTypeMetricModal({ metric, baseParams, onClose }) {
+export function DailyTypeMetricModal({ metric, baseParams, customerTypeRows = [], customerTypeCategories = [], onClose }) {
   const [expandedCustomerId, setExpandedCustomerId] = useState(null);
   const [customerTasks, setCustomerTasks] = useState({});
   const closeButtonRef = useRef(null);
@@ -89,6 +89,13 @@ export function DailyTypeMetricModal({ metric, baseParams, onClose }) {
                 {metric.byCustomer.map((row) => {
                   const isOpen = expandedCustomerId === row.customerId;
                   const taskState = customerTasks[row.customerId];
+                  // Esse cliente pode ter chamados de OUTROS tipos além do que
+                  // abriu este modal (ex.: também tem Preventiva, além da
+                  // Corretiva listada aqui) — cruza com byCustomerType (já
+                  // calculado no /details, mesmo período) pra mostrar isso
+                  // sem o usuário precisar fechar o modal e ir procurar na
+                  // tabela "Chamados por Cliente" mais embaixo na página.
+                  const typeRow = customerTypeRows.find((r) => r.customerId === row.customerId);
                   return (
                     <li key={row.customerId} className="metric-modal__customer">
                       <button
@@ -116,6 +123,18 @@ export function DailyTypeMetricModal({ metric, baseParams, onClose }) {
 
                       {isOpen && (
                         <div className="metric-modal__tasks">
+                          {typeRow && (
+                            <div className="metric-modal__type-breakdown">
+                              <span className="metric-modal__type-breakdown-label">Esse cliente no período, por tipo:</span>
+                              {customerTypeCategories.map((cat) => (
+                                <span key={cat.key} className="badge badge--neutral">
+                                  {cat.label}: {typeRow[cat.key] ?? 0}
+                                </span>
+                              ))}
+                              <span className="badge badge--neutral">Outros: {typeRow.outros ?? 0}</span>
+                            </div>
+                          )}
+
                           {taskState?.loading ? (
                             <div className="skeleton" style={{ height: 90 }} />
                           ) : taskState?.error ? (

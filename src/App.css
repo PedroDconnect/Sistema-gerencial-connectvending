@@ -1257,6 +1257,25 @@
   flex-shrink: 0;
   accent-color: var(--accent);
 }
+/* Variante de seleção única (ver Select.jsx): opção é um <button>, não um
+   <label> com checkbox — reset explícito em vez de reaproveitar o botão
+   nativo do navegador. */
+button.multiselect__option {
+  width: 100%;
+  border: none;
+  background: none;
+  font-family: inherit;
+  text-align: left;
+  justify-content: space-between;
+}
+.multiselect__option.is-selected {
+  color: var(--accent);
+  font-weight: 700;
+}
+.multiselect__option-check {
+  flex-shrink: 0;
+  color: var(--accent);
+}
 .multiselect__empty {
   padding: 10px 6px;
   font-size: 12px;
@@ -1912,6 +1931,18 @@
 }
 .metric-modal__tasks {
   padding: 4px 10px 14px 32px;
+}
+.metric-modal__type-breakdown {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+.metric-modal__type-breakdown-label {
+  font-size: 11.5px;
+  color: var(--text-muted);
+  margin-right: 2px;
 }
 
 .operacao-status-breakdown__list {

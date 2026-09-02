@@ -241,7 +241,17 @@ export function OperacaoPage({ scope }) {
         </p>
       )}
 
-      <DailyTypeMetrics metrics={details.data?.dailyTypeMetrics ?? []} loading={details.loading} baseParams={params} />
+      <DailyTypeMetrics
+        metrics={details.data?.dailyTypeMetrics ?? []}
+        loading={details.loading}
+        baseParams={params}
+        // Só faz sentido fora de "rotina" — lá todo chamado é Abastecimento
+        // Rotina, nenhuma das 3 categorias bate (mesmo motivo de
+        // CustomerTypeTable ficar oculta ali, ver abaixo), a quebra por
+        // tipo cairia toda em "Outros" e não acrescentaria nada.
+        customerTypeRows={scope !== "rotina" ? byCustomerType : []}
+        customerTypeCategories={scope !== "rotina" ? customerTypeCategories : []}
+      />
 
       <StatusBreakdown summary={details.data} loading={details.loading || isDetailsIncomplete} />
 
