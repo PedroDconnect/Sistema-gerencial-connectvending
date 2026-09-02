@@ -379,10 +379,23 @@ create index if not exists machine_patrimony_registry_patrimony_idx on machine_p
 alter table machine_patrimony_registry enable row level security;
 
 -- Vendas brutas da VMpay, só o necessário pra consumo (allowlist estrita,
--- mesma convenção do resto do projeto — raw_data preserva o resto pra
--- auditoria). external_sale_id é o vend.id real da VMpay (confirmado ao
--- vivo, não inventado) — chave de idempotência de verdade: reprocessar o
--- mesmo período nunca duplica.
+-- mesma convenção do resto do projeto). external_sale_id é o vend.id real
+-- da VMpay (confirmado ao vivo, não inventado) — chave de idempotência de
+-- verdade: reprocessar o mesmo período nunca duplica.
+--
+-- NÃO é o histórico permanente — é um buffer de ~90 dias (ver
+-- getVmpaySalesRetentionDays em vmpay.config.ts e deleteStaleSales em
+-- salesSyncService.ts), que alimenta só o detalhamento "consumo por
+-- produto" de período recente. O histórico de verdade, sem prazo de
+-- validade, é machine_consumption_daily logo abaixo (agregado, poucos KB).
+--
+-- raw_data (02/09/2026): existia aqui, guardando o payload inteiro da
+-- VMpay por venda sem allowlist — nunca lido de volta em código nenhum, e
+-- o principal responsável pela tabela chegar a ~912MB num plano Free de
+-- 2GB. Removido do INSERT (ver upsertSales); a coluna pode continuar
+-- existindo em bancos antigos (nullable, não quebra nada), mas não recebe
+-- mais dado novo. Rode `alter table machine_sales drop column raw_data;`
+-- manualmente se quiser remover de vez.
 create table if not exists machine_sales (
   id bigint generated always as identity primary key,
   external_sale_id bigint not null,

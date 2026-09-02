@@ -72,6 +72,19 @@ export function getVmpaySalesSyncTimeBudgetMs(): number {
   return readIntEnv("VMPAY_SALES_SYNC_TIME_BUDGET_MS", 100_000);
 }
 
+// Há quanto tempo uma venda pode ficar guardada linha a linha em
+// machine_sales antes de ser limpa (ver deleteStaleSales em
+// salesSyncService.ts). Pedido explícito (02/09/2026): machine_sales
+// nunca deve crescer pra sempre — o histórico de verdade, sem prazo de
+// validade, vive em machine_consumption_daily (agregado, ~centenas de KB
+// mesmo depois de anos). A linha crua só precisa sobreviver o suficiente
+// pra alimentar o detalhamento "consumo por produto" de um período
+// recente (ver getMachineConsumption) — 90 dias cobre até o preset "30
+// dias" com folga.
+export function getVmpaySalesRetentionDays(): number {
+  return readIntEnv("VMPAY_SALES_RETENTION_DAYS", 90);
+}
+
 export interface VmpayCredentials {
   baseUrl: string;
   accessToken: string;

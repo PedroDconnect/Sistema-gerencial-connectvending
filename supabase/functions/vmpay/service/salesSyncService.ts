@@ -8,6 +8,7 @@ import {
   getVmpaySalesSyncTtlSeconds,
   getVmpaySalesBackfillDays,
   getVmpaySalesSyncTimeBudgetMs,
+  getVmpaySalesRetentionDays,
 } from "../integrations/vmpay.config.ts";
 import { logEvent } from "../shared/logger.ts";
 
@@ -75,7 +76,6 @@ interface NormalizedSale {
   productCategoryId: number | null;
   quantity: number;
   value: number | null;
-  raw: Record<string, unknown>;
 }
 
 function normalizeSale(raw: Record<string, unknown>): NormalizedSale | null {
@@ -99,7 +99,6 @@ function normalizeSale(raw: Record<string, unknown>): NormalizedSale | null {
     productCategoryId: typeof good?.category_id === "number" ? good.category_id : null,
     quantity: typeof raw.quantity === "number" ? raw.quantity : 0,
     value: typeof raw.value === "number" ? raw.value : null,
-    raw,
   };
 }
 
@@ -134,6 +133,13 @@ async function fetchSalesPage(
 // on conflict do nothing: uma venda já registrada nunca muda (é um evento
 // passado) — idempotência real via external_sale_id (vend.id confirmado ao
 // vivo), não um composite key inventado.
+//
+// raw_data nunca é gravado (02/09/2026, revisão de espaço em disco): era o
+// payload inteiro da VMpay por venda, sem allowlist, nunca lido de volta
+// em lugar nenhum do código — o principal responsável pelos ~912MB da
+// tabela num plano Free de 2GB. O que a aplicação realmente usa (produto,
+// categoria, quantidade, valor, patrimônio, data) já vira coluna própria
+// logo abaixo.
 async function upsertSales(db: SupabaseClient, sales: NormalizedSale[]): Promise<void> {
   if (sales.length === 0) return;
   const rows = sales.map((s) => ({
@@ -145,7 +151,6 @@ async function upsertSales(db: SupabaseClient, sales: NormalizedSale[]): Promise
     product_category_id: s.productCategoryId,
     quantity: s.quantity,
     value: s.value,
-    raw_data: s.raw,
   }));
   const { error } = await db.from("machine_sales").upsert(rows, { onConflict: "external_sale_id", ignoreDuplicates: true });
   if (error) throw new Error(`Falha ao salvar machine_sales: ${error.message}`);
@@ -156,14 +161,28 @@ async function reaggregate(db: SupabaseClient, since: string, until: string): Pr
   if (error) throw new Error(`Falha ao reagregar machine_consumption_daily: ${error.message}`);
 }
 
+// machine_sales não é o histórico de verdade — é só um buffer recente pra
+// alimentar o detalhamento "consumo por produto" (getMachineConsumption)
+// e a reagregação em machine_consumption_daily, que sim guarda o
+// histórico completo pra sempre (poucos KB por máquina/dia). Sem essa
+// limpeza, machine_sales voltaria a crescer sem limite mesmo sem
+// raw_data — só mais devagar. Roda só depois de reagregar (linha acima),
+// nunca antes: apagar antes arriscaria zerar um dia que ainda não tinha
+// sido somado pra machine_consumption_daily.
+async function deleteStaleSales(db: SupabaseClient): Promise<void> {
+  const cutoff = new Date(Date.now() - getVmpaySalesRetentionDays() * 86_400_000).toISOString();
+  const { error } = await db.from("machine_sales").delete().lt("occurred_at", cutoff);
+  if (error) throw new Error(`Falha ao limpar machine_sales antigo: ${error.message}`);
+}
+
 // Paginação em rodadas concorrentes (mesmo padrão de fetchVendsWindow em
 // vmpayService.ts): não dá pra saber o total de páginas de antemão (a
 // VMpay não devolve contagem), então busca em lotes e para na primeira
 // rodada com página incompleta (sinal de fim). Cada rodada é salva e
-// descartada da memória na hora (nunca acumula milhares de vendas — com
-// raw_data completo — num array só até o fim). Respeita um orçamento de
-// tempo compartilhado — se estourar, para e devolve o que já tem
-// (reachedStart=false), pra retomar na próxima chamada.
+// descartada da memória na hora (nunca acumula milhares de vendas num
+// array só até o fim). Respeita um orçamento de tempo compartilhado — se
+// estourar, para e devolve o que já tem (reachedStart=false), pra
+// retomar na próxima chamada.
 async function fetchAndPersistSalesWindow(
   db: SupabaseClient,
   creds: { baseUrl: string; accessToken: string },
@@ -256,6 +275,10 @@ async function runSalesSync(db: SupabaseClient): Promise<SalesSyncMeta> {
       backfillCursorAt = r.oldestOccurredAt ?? backfillCursorAt ?? to;
     }
   }
+
+  // Sempre por último, depois de qualquer reagregação das duas fases
+  // acima — nunca antes (ver comentário de deleteStaleSales).
+  await deleteStaleSales(db);
 
   const meta: SalesSyncMeta = {
     status: recentCursorAt || !backfillComplete ? "partial" : "ok",
