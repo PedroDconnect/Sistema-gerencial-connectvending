@@ -1,8 +1,20 @@
 import { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { auvoRequest } from "./auvoWriteClient.ts";
-import { getValidToken } from "./auvo.tokenManager.ts";
-import { AUVO_BASE_URL, AUVO_TICKETS_PATH, AuvoCredentials } from "./auvo.config.ts";
+import { AUVO_TICKETS_PATH, AuvoCredentials } from "./auvo.config.ts";
 import { ControlledError } from "../../shared/http.ts";
+
+// Confirmado contra a doc real da Auvo (OpenAPI, 02/09/2026): "Chamados"
+// só tem GET /tickets/{id}, PATCH /tickets/{id}, POST /tickets, GET
+// /tickets, GET /tickets/request-type — NÃO existe PUT /tickets/{id}/attachments
+// (diferente de Produtos/Equipamentos/Tarefas/Despesas, que têm esse
+// endpoint dedicado). O anexo é um campo ("attachments", "Array of any")
+// dentro do próprio corpo de POST /tickets — vai junto na criação, não
+// depois. Por isso attachDocument (chamada separada pra um endpoint que
+// não existe) foi removida; o PDF agora entra direto em createTicket.
+export interface TicketAttachment {
+  fileName: string;
+  bytes: Uint8Array;
+}
 
 export interface CreateTicketInput {
   title: string;
@@ -11,6 +23,7 @@ export interface CreateTicketInput {
   requesterName: string;
   requesterEmail: string;
   externalId: string; // determinístico: "PREP-2026-000145-F01" (spec 9.4)
+  attachment?: TicketAttachment;
 }
 
 export interface CreateTicketResult {
@@ -22,13 +35,32 @@ export interface CreateTicketResult {
 // requestTypeId/statusId fixos pedidos explicitamente na spec (seção 9.3):
 // 47652 = "Pedidos de Preparação de máquinas", 97758 = "Aguardando
 // atendimento". Se a Auvo reconfigurar esses IDs (fluxo administrativo
-// deles, fora deste projeto), atualizar aqui.
+// deles, fora deste projeto) e a criação de ticket passar a falhar por
+// "tipo/status inválido", confirmar os valores reais em
+// GET /tickets/request-type e GET /tickets/status.
 const PREPARATION_REQUEST_TYPE_ID = 47652;
 const AWAITING_SERVICE_STATUS_ID = 97758;
 const DEFAULT_PRIORITY = 1;
 
-// Payload exatamente como veio na spec (seção 9.3) — exemplo já tirado da
-// doc real da Auvo pelo autor da spec.
+function toBase64(bytes: Uint8Array): string {
+  let binary = "";
+  for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+  return btoa(binary);
+}
+
+// O shape de CADA item de "attachments" continua sendo o único pedaço
+// realmente não confirmado (a doc só diz "Array of any", sem detalhar as
+// propriedades) — fileName/base64Content é a convenção mais comum pra
+// embutir arquivo em corpo JSON (sem multipart), mas se a Auvo esperar
+// nomes de campo diferentes, é só ajustar aqui dentro, nada mais no
+// módulo depende do formato exato.
+function toAttachmentPayload(attachment: TicketAttachment): Record<string, unknown> {
+  return {
+    fileName: attachment.fileName,
+    base64Content: toBase64(attachment.bytes),
+  };
+}
+
 export async function createTicket(db: SupabaseClient, creds: AuvoCredentials, input: CreateTicketInput): Promise<CreateTicketResult> {
   const payload = await auvoRequest(db, creds, AUVO_TICKETS_PATH, {
     method: "POST",
@@ -42,6 +74,7 @@ export async function createTicket(db: SupabaseClient, creds: AuvoCredentials, i
       customerId: input.customerId,
       priority: DEFAULT_PRIORITY,
       externalId: input.externalId,
+      ...(input.attachment ? { attachments: [toAttachmentPayload(input.attachment)] } : {}),
     },
   });
   const result = (payload.result as Record<string, unknown>) ?? payload;
@@ -56,40 +89,23 @@ export async function createTicket(db: SupabaseClient, creds: AuvoCredentials, i
   };
 }
 
-// NÃO CONFIRMADO CONTRA A DOC REAL DA AUVO — a spec (seções 2 e 9.5) é
-// explícita: o formato do campo de anexo não estava documentado nela, e
-// pediu pra não inventar base64/URL sem confirmar. Implementação
-// best-effort (multipart/form-data, convenção mais comum de upload de
-// arquivo em API REST) isolada NESTA função de propósito: se o formato
-// real for outro, é só trocar o corpo daqui, nada mais no módulo depende
-// do formato exato. Chamador trata falha aqui como não-fatal (ticket já
-// foi criado com sucesso antes desta chamada).
-export async function attachDocument(
+// Ficha corrigida (v2) depois que o ticket já existe (spec seção 15): a
+// doc só documenta externalId/statusId como campos editáveis de
+// PATCH /tickets/{id} — "attachments" não aparece lá. Não há nenhum outro
+// endpoint pra anexar depois da criação (ver nota no topo do arquivo), só
+// resta tentar o mesmo campo via PATCH na esperança de que a doc resumida
+// não seja exaustiva. Best-effort de verdade — chamador trata falha como
+// não-fatal e mantém o link de download do v2 pra reanexo manual.
+export async function tryReattachDocument(
   db: SupabaseClient,
   creds: AuvoCredentials,
   ticketId: number,
-  fileName: string,
-  fileBytes: Uint8Array
+  attachment: TicketAttachment
 ): Promise<void> {
-  const form = new FormData();
-  form.append("file", new Blob([fileBytes], { type: "application/pdf" }), fileName);
-
-  // auvoRequest serializa JSON por padrão — chamada solta aqui porque
-  // multipart precisa de Content-Type com boundary gerado pelo próprio
-  // FormData, incompatível com o "Content-Type: application/json" fixo
-  // do client genérico. Ainda passa pelo mesmo token cacheado.
-  const token = await getValidToken(db, creds.apiKey, creds.apiToken);
-
-  const res = await fetch(`${AUVO_BASE_URL}${AUVO_TICKETS_PATH}/${ticketId}/attachments`, {
-    method: "POST",
-    headers: { Authorization: `Bearer ${token}` },
-    body: form,
+  await auvoRequest(db, creds, `${AUVO_TICKETS_PATH}/${ticketId}`, {
+    method: "PATCH",
+    body: { attachments: [toAttachmentPayload(attachment)] },
   });
-
-  if (!res.ok) {
-    const body = await res.text().catch(() => "");
-    throw new ControlledError(`Falha ao anexar documento na Auvo (HTTP ${res.status}): ${body.slice(0, 300)}`, res.status);
-  }
 }
 
 export interface TicketStatusResult {
@@ -101,16 +117,22 @@ export interface TicketStatusResult {
   assigneeName: string | null;
 }
 
-// Best-effort também (menos arriscado que o anexo — GET é seguro de
-// iterar): monta a consulta exatamente como a spec pede na seção 14
-// (searchTasks + searchStatusChanges), mas o shape do JSON de resposta
-// (onde exatamente vem status.name / tarefa vinculada / responsável)
-// ainda não foi confirmado contra uma resposta real. Ajustar os
-// caminhos de leitura abaixo assim que houver um exemplo de resposta.
+// Corrigido contra a doc real: searchTasks/searchStatusChanges são
+// parâmetros da LISTAGEM (GET /tickets?paramFilter=...), não de
+// GET /tickets/{id} (que não documenta query params nenhum). Filtra por
+// id via paramFilter.ids (mesmo formato de filtro comma-separated já
+// confirmado nos outros recursos da API).
 export async function syncTicketStatus(db: SupabaseClient, creds: AuvoCredentials, ticketId: number): Promise<TicketStatusResult> {
-  const query = new URLSearchParams({ searchTasks: "true", searchStatusChanges: "true" });
-  const payload = await auvoRequest(db, creds, `${AUVO_TICKETS_PATH}/${ticketId}?${query.toString()}`);
-  const result = (payload.result as Record<string, unknown>) ?? payload;
+  const query = new URLSearchParams({
+    paramFilter: JSON.stringify({ ids: String(ticketId) }),
+    searchTasks: "true",
+    searchStatusChanges: "true",
+    page: "1",
+    pageSize: "1",
+  });
+  const payload = await auvoRequest(db, creds, `${AUVO_TICKETS_PATH}?${query.toString()}`);
+  const listResult = payload.result as Record<string, unknown> | undefined;
+  const result = ((listResult?.entityList as Record<string, unknown>[]) ?? [])[0] ?? {};
   const task = (result.tasks as Record<string, unknown>[] | undefined)?.[0];
 
   return {

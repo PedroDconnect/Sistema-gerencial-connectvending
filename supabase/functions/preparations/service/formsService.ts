@@ -6,7 +6,7 @@ import { getTemplateById } from "./templatesService.ts";
 import { generatePreparationFormPdf } from "./pdfService.ts";
 import { uploadDocument, downloadDocument } from "./storageService.ts";
 import { readAuvoCredentials } from "../integrations/auvo/auvo.config.ts";
-import { createTicket, attachDocument } from "../integrations/auvo/auvoTickets.ts";
+import { createTicket, tryReattachDocument } from "../integrations/auvo/auvoTickets.ts";
 
 export interface FormRow {
   id: string;
@@ -72,8 +72,20 @@ async function updateFormRow(db: SupabaseClient, formId: string, patch: Record<s
   if (error) throw new ControlledError(`Falha ao atualizar ficha: ${error.message}`, 502);
 }
 
-async function ensureDocument(db: SupabaseClient, form: FormRow, order: OrderContext, caller: CallerInfo | null): Promise<string> {
-  if (form.documentPath) return form.documentPath;
+interface DocumentResult {
+  path: string;
+  bytes: Uint8Array;
+}
+
+// Devolve path + bytes sempre — se o documento já existia (retry depois
+// de uma falha mais adiante no fluxo), baixa do Storage; se não, gera e
+// já devolve os bytes em memória, sem precisar baixar de volta o que
+// acabou de subir só pra anexar no ticket em seguida.
+async function ensureDocument(db: SupabaseClient, form: FormRow, order: OrderContext, caller: CallerInfo | null): Promise<DocumentResult> {
+  if (form.documentPath) {
+    const bytes = await downloadDocument(db, form.documentPath);
+    return { path: form.documentPath, bytes };
+  }
 
   await updateFormRow(db, form.id, { status: "GENERATING_DOCUMENT" });
   const template = await getTemplateById(db, form.templateId);
@@ -91,16 +103,16 @@ async function ensureDocument(db: SupabaseClient, form: FormRow, order: OrderCon
   await uploadDocument(db, documentPath, pdfBytes);
   await updateFormRow(db, form.id, { document_path: documentPath });
   await writeLog(db, { orderId: order.id, formId: form.id, action: "PDF_GENERATED", caller, metadata: { documentPath } });
-  return documentPath;
+  return { path: documentPath, bytes: pdfBytes };
 }
 
-// Idempotente (spec seção 12): se já tem auvo_ticket_id, não cria de novo
-// — só tenta o anexo de novo se ainda não tiver ido. Cada etapa (PDF →
-// ticket → anexo) só roda se a anterior ainda não tiver acontecido, então
-// "Tentar novamente" numa ficha com erro retoma de onde parou, nunca do
-// zero. Falha de anexo NÃO é fatal (o ticket já existe) — fica registrada
-// e a ficha mostra "documento não anexado" em vez de perder o ticket
-// criado com sucesso.
+// Idempotente (spec seção 12): se já tem auvo_ticket_id, não cria de novo.
+// Anexo (confirmado contra a doc real da Auvo, 02/09/2026 — ver
+// auvoTickets.ts): vai embutido no PRÓPRIO POST /tickets, não é mais uma
+// chamada separada — não existe endpoint de anexo pós-criação pra
+// chamados. Só quando o ticket JÁ existir (retry de uma falha mais
+// adiante, ou ficha criada antes desta correção) é que tenta reanexar via
+// PATCH — best-effort, nunca fatal.
 export async function sendFormToAuvo(
   db: SupabaseClient,
   form: FormRow,
@@ -108,7 +120,7 @@ export async function sendFormToAuvo(
   caller: CallerInfo | null
 ): Promise<FormRow> {
   try {
-    const documentPath = await ensureDocument(db, form, order, caller);
+    const { path: documentPath, bytes: documentBytes } = await ensureDocument(db, form, order, caller);
 
     let ticketId = form.auvoTicketId;
     if (!ticketId) {
@@ -121,6 +133,7 @@ export async function sendFormToAuvo(
         requesterName: order.requestedByName ?? caller?.name ?? caller?.email ?? "",
         requesterEmail: order.requestedByEmail ?? caller?.email ?? "",
         externalId: form.externalId,
+        attachment: { fileName: `${form.externalId}.pdf`, bytes: documentBytes },
       });
       ticketId = result.ticketId;
       await updateFormRow(db, form.id, {
@@ -129,19 +142,17 @@ export async function sendFormToAuvo(
         auvo_ticket_status_name: result.statusName,
       });
       await writeLog(db, { orderId: order.id, formId: form.id, action: "AUVO_TICKET_CREATED", caller, metadata: { ticketId } });
-    }
-
-    try {
-      const creds = readAuvoCredentials();
-      const bytes = await downloadDocument(db, documentPath);
-      await attachDocument(db, creds, ticketId, `${form.externalId}.pdf`, bytes);
-      await writeLog(db, { orderId: order.id, formId: form.id, action: "AUVO_ATTACHMENT_SENT", caller });
-    } catch (attachError) {
-      const message = attachError instanceof Error ? attachError.message : "Falha desconhecida ao anexar documento.";
-      await writeLog(db, { orderId: order.id, formId: form.id, action: "ERROR", caller, metadata: { step: "attach", message } });
-      // Segue sem relançar: o ticket já existe, só o anexo falhou — não
-      // perde o que já deu certo por causa da parte não confirmada da
-      // integração (ver auvoTickets.ts#attachDocument).
+      await writeLog(db, { orderId: order.id, formId: form.id, action: "AUVO_ATTACHMENT_SENT", caller, metadata: { via: "create" } });
+    } else {
+      try {
+        const creds = readAuvoCredentials();
+        await tryReattachDocument(db, creds, ticketId, { fileName: `${form.externalId}.pdf`, bytes: documentBytes });
+        await writeLog(db, { orderId: order.id, formId: form.id, action: "AUVO_ATTACHMENT_SENT", caller, metadata: { via: "patch" } });
+      } catch (attachError) {
+        const message = attachError instanceof Error ? attachError.message : "Falha desconhecida ao anexar documento.";
+        await writeLog(db, { orderId: order.id, formId: form.id, action: "ERROR", caller, metadata: { step: "attach", message } });
+        // Segue sem relançar: o ticket já existe, só o anexo falhou.
+      }
     }
 
     await updateFormRow(db, form.id, {
@@ -159,8 +170,9 @@ export async function sendFormToAuvo(
 }
 
 // Ficha corrigida depois do ticket já criado (spec seção 15): nova versão
-// do documento, tenta reanexar automaticamente no MESMO ticket (nunca
-// cria ticket novo); se o anexo falhar, fica registrado e o pedido
+// do documento, tenta reanexar via PATCH no MESMO ticket (nunca cria
+// ticket novo) — best-effort, a doc da Auvo não confirma "attachments"
+// como campo editável de PATCH. Se falhar, fica registrado e o pedido
 // continua mostrando o link de download do v2 pra reanexo manual.
 export async function regenerateDocument(
   db: SupabaseClient,
@@ -177,13 +189,12 @@ export async function regenerateDocument(
   }
 
   const updatedForm: FormRow = { ...form, formData: newFormData ?? form.formData, documentVersion: nextVersion, documentPath: null };
-  const documentPath = await ensureDocument(db, updatedForm, order, caller);
+  const { path: documentPath, bytes: documentBytes } = await ensureDocument(db, updatedForm, order, caller);
 
   if (updatedForm.auvoTicketId) {
     try {
       const creds = readAuvoCredentials();
-      const bytes = await downloadDocument(db, documentPath);
-      await attachDocument(db, creds, updatedForm.auvoTicketId, `${form.externalId}-v${nextVersion}.pdf`, bytes);
+      await tryReattachDocument(db, creds, updatedForm.auvoTicketId, { fileName: `${form.externalId}-v${nextVersion}.pdf`, bytes: documentBytes });
       await writeLog(db, { orderId: order.id, formId: form.id, action: "AUVO_ATTACHMENT_SENT", caller, metadata: { documentVersion: nextVersion } });
     } catch (attachError) {
       const message = attachError instanceof Error ? attachError.message : "Falha desconhecida ao reanexar documento.";
