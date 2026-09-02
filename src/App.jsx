@@ -11,6 +11,8 @@ import { OperacaoPage } from "./components/operacao/OperacaoPage";
 import { TelemetriaPage } from "./components/telemetria/TelemetriaPage";
 import { OperacaoCompletaPage } from "./components/operacaoCompleta/OperacaoCompletaPage";
 import { AdminUsersPage } from "./components/admin/AdminUsersPage";
+import { PreparationTemplateSettingsPage } from "./components/admin/PreparationTemplateSettingsPage";
+import { PreparationOrdersPage } from "./components/preparations/PreparationOrdersPage";
 import { navItems } from "./data/mockData";
 import { formatCompactCurrency, formatDeltaPct } from "./lib/format";
 import { useAuth } from "./context/AuthContext";
@@ -131,14 +133,21 @@ function App() {
   const activeNavItem = findNavItem(active);
 
   function renderContent() {
-    if (active === "administracao") {
+    // "administracao" virou grupo (Usuários / Ficha de Preparação) — os
+    // dois filhos são gated só por isAdmin, nunca por hasModuleAccess,
+    // mesma regra que "administracao" sozinho já seguia antes.
+    if (active === "administracao-usuarios") {
       return isAdmin ? <AdminUsersPage /> : <AccessDenied label="Administração" />;
+    }
+    if (active === "administracao-ficha-preparacao") {
+      return isAdmin ? <PreparationTemplateSettingsPage /> : <AccessDenied label="Administração" />;
     }
     if (!hasModuleAccess(active)) {
       return <AccessDenied label={activeNavItem?.label ?? "este módulo"} />;
     }
     if (active === "overview") return <Dashboard />;
     if (active === "ativos") return <AtivosPage />;
+    if (active === "preparacoes") return <PreparationOrdersPage />;
     if (active === "operacao-chamados") return <OperacaoPage scope="chamados" />;
     if (active === "operacao-rotina") return <OperacaoPage scope="rotina" />;
     if (active === "telemetria") return <TelemetriaPage />;
