@@ -9,6 +9,7 @@ import { ControlledError } from "./http.ts";
 export const ASSIGNABLE_MODULE_IDS = new Set([
   "overview",
   "ativos",
+  "preparacoes",
   "operacao-chamados",
   "operacao-rotina",
   "telemetria",

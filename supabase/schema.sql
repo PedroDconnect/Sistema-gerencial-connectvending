@@ -542,3 +542,193 @@ create table if not exists auvo_task_type_catalog (
 );
 
 alter table auvo_task_type_catalog enable row level security;
+
+-- ---------- Pedidos de Preparação de Máquinas × Auvo ----------
+-- Handoff de spec (02/09/2026): 1 pedido agrupa N "fichas" (uma por
+-- máquina/local); cada ficha gera 1 documento (PDF, guardado no Storage
+-- bucket "preparation-documents", nunca só na Auvo) + 1 ticket próprio na
+-- Auvo. O pedido é o agrupador, a ficha é a unidade operacional, o ticket
+-- pertence à ficha — nunca diretamente ao pedido. Mesmo padrão de RLS do
+-- resto do projeto desde integration_tokens: enable row level security
+-- sem NENHUMA policy — só a service role (dentro da Edge Function
+-- "preparations") acessa; nem anon nem authenticated têm policy alguma.
+
+-- Código legível tipo "PREP-2026-000145" — nada parecido existia no
+-- projeto (todas as PKs de resto são uuid/bigint identity, sem serial
+-- legível). Sequência própria, reaproveitada como default da coluna
+-- (evita round-trip: o Postgres já gera o código no INSERT).
+create sequence if not exists preparation_order_code_seq;
+
+create or replace function generate_preparation_code()
+returns text as $$
+  select 'PREP-' || to_char(now(), 'YYYY') || '-' || lpad(nextval('preparation_order_code_seq')::text, 6, '0');
+$$ language sql volatile;
+
+revoke execute on function generate_preparation_code() from anon, authenticated;
+
+-- Template do formulário — versionado explicitamente porque uma ficha
+-- histórica nunca pode mudar quando o admin edita os campos (seção 6 da
+-- spec): cada ficha guarda template_id + template_version na criação, e
+-- editar o template cria uma linha nova (version+1, active=true), nunca
+-- faz update na antiga. "schema" segue o formato dado na spec seção 5:
+-- { fields: [{key,label,type,required,perForm,options}] }.
+create table if not exists preparation_form_templates (
+  id uuid primary key default gen_random_uuid(),
+  name text not null,
+  version int not null,
+  schema jsonb not null,
+  active boolean not null default true,
+  created_by uuid,
+  created_at timestamptz not null default now()
+);
+
+create unique index if not exists preparation_form_templates_version_idx
+  on preparation_form_templates (name, version);
+
+alter table preparation_form_templates enable row level security;
+
+-- Template v1 (spec seção 5.1) — não é dado de demonstração (por isso
+-- aqui em schema.sql, não em seed.sql): sem essa linha o módulo não tem
+-- nenhum template ativo pra usar. on conflict faz nada se já rodou antes
+-- (mesma idempotência de "create table if not exists").
+insert into preparation_form_templates (name, version, schema, active)
+values (
+  'Ficha de preparação Connect Vending',
+  1,
+  '{
+    "fields": [
+      { "key": "contract_number", "label": "Nº Contrato", "type": "text", "required": true },
+      { "key": "installation_forecast", "label": "Previsão de instalação", "type": "date", "required": true },
+      { "key": "customer_name", "label": "Nome do cliente", "type": "text", "required": true },
+      { "key": "cnpj", "label": "CNPJ", "type": "text", "required": true },
+      { "key": "installation_address", "label": "Endereço de Instalação", "type": "textarea", "required": true },
+      { "key": "internal_location", "label": "Local Interno da Máquina", "type": "textarea", "required": true, "perForm": true },
+      { "key": "contact_email", "label": "E-mail de contato", "type": "email", "required": true },
+      { "key": "saf_email", "label": "E-mail de acesso ao SAF", "type": "email", "required": true },
+      { "key": "business_model", "label": "Modelo de negócio", "type": "single_select", "required": true, "options": ["Comodato"] },
+      { "key": "supply_days", "label": "Dias de abastecimento", "type": "multi_select", "required": true,
+        "options": ["Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado", "Domingo"] },
+      { "key": "machine_model", "label": "Modelo da máquina", "type": "single_select", "required": true, "perForm": true, "options": ["Outra"] },
+      { "key": "machine_type", "label": "Tipo", "type": "single_select", "required": true, "perForm": true, "options": ["Semi-Automática"] },
+      { "key": "system_type", "label": "Tipo de sistema", "type": "single_select", "required": true, "perForm": true, "options": ["Sem sistema"] },
+      { "key": "accessories", "label": "Acessórios", "type": "multi_select", "required": true,
+        "options": ["Gabinete", "Rede Hídrica", "Chave da Máquina", "Galão", "Chave de teste", "Estabilizador", "Transformador"] },
+      { "key": "cup_type", "label": "Tipo de copo", "type": "single_select", "required": true, "options": ["Biodegradável"] },
+      { "key": "product_brand", "label": "Marca do produto", "type": "single_select", "required": true, "options": ["3 Corações"] },
+      { "key": "coffee_type", "label": "Tipo do café", "type": "single_select", "required": true, "options": ["Premium"] },
+      { "key": "standard_layouts", "label": "Layouts Padrões", "type": "multi_select", "required": true,
+        "options": [
+          "Café Curto", "Café Longo", "Café Espresso", "Café Tradicional Curto", "Café Tradicional Longo",
+          "Café Tradicional Intenso (Sl)", "Café Tradicional Suave (Sl)", "Café com Leite", "Café com Leite (Zr)",
+          "Café com leite com chocolate", "Mocaccino", "Mocaccino (Zr)", "Mocaccino (Sl)", "Mocaccino (Grão)",
+          "Cappuccino", "Cappuccino (Zr)", "Cappuccino Italiano (Grão)", "Cappuccino Italiano (Sl)",
+          "Cappuccino com Chocolate", "Chocolate", "Chocolate (Zr)", "Chá de Limão", "Chá de Pêssego",
+          "Chá Frutas vermelhas", "Leite", "Água",
+          "Café Curto Espresso e Café Curto Espresso Gelado", "Café Longo Espresso e Café Longo Espresso Gelado",
+          "Café com Leite Cremoso e Café com Leite Cremoso Gelado", "Cappuccino Cremoso e Cappuccino Cremoso Gelado",
+          "Chocolate Quente Cremoso e Chocolate Cremoso Gelado", "Moccaccino e Moccaccino Gelado",
+          "Agua Filtrada", "Água Quente", "Água com Gelo", "Gelo"
+        ] },
+      { "key": "dose_value", "label": "Valor da Dose", "type": "text", "required": false },
+      { "key": "observations", "label": "Observações", "type": "textarea", "required": false }
+    ]
+  }'::jsonb,
+  true
+)
+on conflict (name, version) do nothing;
+
+-- customer_id aponta pro cliente já sincronizado em auvo_customers (não
+-- existe — nem precisa existir — uma tabela de clientes própria deste
+-- módulo: a Auvo já é a fonte de verdade de cliente aqui, e auvo_customers
+-- já é o cache local dela). auvo_customer_id é uma cópia direta de
+-- auvo_customers.auvo_id, guardada solta pra criar ticket sem precisar de
+-- join — a Auvo só aceita o id numérico dela, nunca o customer_id interno.
+create table if not exists preparation_orders (
+  id uuid primary key default gen_random_uuid(),
+  code text not null unique default generate_preparation_code(),
+  customer_id bigint not null references auvo_customers (id),
+  auvo_customer_id bigint not null,
+  requested_by uuid,
+  requested_by_name text,
+  requested_by_email text,
+  form_count int not null,
+  status text not null default 'DRAFT'
+    check (status in ('DRAFT', 'PROCESSING', 'PARTIALLY_SENT', 'SENT', 'IN_PROGRESS', 'COMPLETED', 'ERROR', 'CANCELLED')),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create index if not exists preparation_orders_customer_idx on preparation_orders (customer_id);
+create index if not exists preparation_orders_created_at_idx on preparation_orders (created_at desc);
+
+alter table preparation_orders enable row level security;
+
+-- external_id é o mesmo padrão de idempotência já usado em machine_sales
+-- (external_sale_id) — determinístico ("PREP-2026-000145-F01", nunca
+-- aleatório), então um duplo clique/retry/timeout tenta criar a MESMA
+-- linha de novo em vez de uma nova, e o índice único below rejeita.
+-- UNIQUE(preparation_order_id, sequence) é a proteção real (banco, não só
+-- checagem em app) contra corrida de duas fichas nascerem com o mesmo
+-- número — risco apontado explicitamente na spec (seção 2).
+-- document_path (não document_url): o bucket é privado, então o que fica
+-- salvo é o caminho no Storage, nunca uma URL pública direta — a Edge
+-- Function gera uma signed URL de curta duração quando alguém pede pra
+-- ver o documento.
+create table if not exists preparation_forms (
+  id uuid primary key default gen_random_uuid(),
+  preparation_order_id uuid not null references preparation_orders (id) on delete cascade,
+  sequence int not null,
+  template_id uuid not null references preparation_form_templates (id),
+  template_version int not null,
+  internal_location text not null,
+  form_data jsonb not null default '{}',
+  status text not null default 'DRAFT'
+    check (status in ('DRAFT', 'READY', 'GENERATING_DOCUMENT', 'CREATING_TICKET', 'SENT_TO_AUVO', 'IN_PROGRESS', 'COMPLETED', 'ERROR')),
+  document_path text,
+  document_version int not null default 1,
+  external_id text not null,
+  auvo_ticket_id bigint,
+  auvo_ticket_status_id bigint,
+  auvo_ticket_status_name text,
+  created_by uuid,
+  created_at timestamptz not null default now(),
+  finalized_by uuid,
+  finalized_at timestamptz,
+  updated_at timestamptz not null default now(),
+  unique (preparation_order_id, sequence),
+  unique (external_id)
+);
+
+create index if not exists preparation_forms_order_idx on preparation_forms (preparation_order_id);
+create index if not exists preparation_forms_ticket_idx on preparation_forms (auvo_ticket_id);
+
+alter table preparation_forms enable row level security;
+
+-- Auditoria (spec seção 16) — nunca guarda token/credencial em metadata,
+-- só o que já é público na tela (quem fez o quê, resposta de erro da
+-- Auvo, status anterior/novo).
+create table if not exists preparation_logs (
+  id uuid primary key default gen_random_uuid(),
+  preparation_order_id uuid not null,
+  preparation_form_id uuid,
+  action text not null,
+  user_id uuid,
+  user_name text,
+  user_email text,
+  metadata jsonb,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists preparation_logs_order_idx on preparation_logs (preparation_order_id, created_at desc);
+
+alter table preparation_logs enable row level security;
+
+-- Bucket privado pros PDFs das fichas — primeira vez que este projeto usa
+-- Supabase Storage. "public=false": nunca acessível por URL direta, só
+-- via Edge Function com a service role (que ignora RLS por padrão da
+-- plataforma, mesma convenção de toda tabela acima) gerando signed URL
+-- sob demanda. Sem nenhuma policy em storage.objects de propósito — só
+-- service role toca esses arquivos, igual ao padrão do banco.
+insert into storage.buckets (id, name, public)
+values ('preparation-documents', 'preparation-documents', false)
+on conflict (id) do nothing;
