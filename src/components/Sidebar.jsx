@@ -39,7 +39,7 @@ export function Sidebar({ active, onNavigate, collapsed = false, onToggleCollaps
   const [theme, setTheme] = useTheme();
   const [menuOpen, setMenuOpen] = useState(false);
   const [openGroup, setOpenGroup] = useState(() => findActiveParentId(active));
-  const initials = (user?.email ?? "CM").slice(0, 2).toUpperCase();
+  const initials = (user?.email ?? "US").slice(0, 2).toUpperCase();
   const items = visibleNavItems(isAdmin, hasModuleAccess);
 
   function handleGroupClick(item) {
@@ -150,7 +150,7 @@ export function Sidebar({ active, onNavigate, collapsed = false, onToggleCollaps
           >
             <span className="sidebar__avatar">{initials}</span>
             <span className="sidebar__profile-text">
-              <span className="sidebar__profile-name">{user?.email ?? "Carlos Mendes"}</span>
+              <span className="sidebar__profile-name">{user?.email ?? "Usuário"}</span>
               <span className="sidebar__profile-role">{isAdmin ? "Administrador" : "Usuário"}</span>
             </span>
             <Icon name="chevronDown" size={16} />
@@ -162,10 +162,6 @@ export function Sidebar({ active, onNavigate, collapsed = false, onToggleCollaps
               </button>
             </div>
           )}
-        </div>
-        <div className="sidebar__updated">
-          <div>Última atualização</div>
-          <div className="sidebar__updated-time">31/05/2025 08:30</div>
         </div>
       </div>
     </aside>

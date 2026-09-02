@@ -1,4 +1,3 @@
-import { Icon } from "./Icon";
 import { useAuth } from "../context/AuthContext";
 
 function greetingPeriod() {
@@ -19,6 +18,10 @@ function greetingName(user) {
   return local.charAt(0).toUpperCase() + local.slice(1);
 }
 
+// Removidos em 02/09/2026: botão de período fixo ("01 – 31 Mai 2025"),
+// "Filtros" e sino de notificações com contador "3" travado — nenhum dos
+// três fazia algo de verdade (não filtravam nada, não abriam nada), eram
+// só decoração fictícia.
 export function Header() {
   const { user } = useAuth();
   const name = greetingName(user);
@@ -31,21 +34,6 @@ export function Header() {
           {name ? `, ${name}!` : "!"}
         </h1>
         <p className="topbar__subtitle">Aqui está o resumo executivo da sua empresa hoje.</p>
-      </div>
-      <div className="topbar__actions">
-        <button type="button" className="btn btn--ghost">
-          <Icon name="calendar" size={16} />
-          01 – 31 Mai 2025
-          <Icon name="chevronDown" size={14} />
-        </button>
-        <button type="button" className="btn btn--ghost">
-          <Icon name="filter" size={16} />
-          Filtros
-        </button>
-        <button type="button" className="icon-btn" aria-label="Notificações">
-          <Icon name="bell" size={18} />
-          <span className="icon-btn__badge">3</span>
-        </button>
       </div>
     </header>
   );

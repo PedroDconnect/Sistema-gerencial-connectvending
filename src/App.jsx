@@ -4,16 +4,14 @@ import { Header } from "./components/Header";
 import { KpiCard } from "./components/KpiCard";
 import { RevenueChart } from "./components/RevenueChart";
 import { ChannelDonut } from "./components/ChannelDonut";
-import { AlertsPanel } from "./components/AlertsPanel";
 import { Login } from "./components/Login";
 import { SetupNeeded } from "./components/SetupNeeded";
-import { ComingSoon } from "./components/ComingSoon";
 import { AtivosPage } from "./components/ativos/AtivosPage";
 import { OperacaoPage } from "./components/operacao/OperacaoPage";
 import { TelemetriaPage } from "./components/telemetria/TelemetriaPage";
 import { OperacaoCompletaPage } from "./components/operacaoCompleta/OperacaoCompletaPage";
 import { AdminUsersPage } from "./components/admin/AdminUsersPage";
-import { staticKpiCards, navItems } from "./data/mockData";
+import { navItems } from "./data/mockData";
 import { formatCompactCurrency, formatDeltaPct } from "./lib/format";
 import { useAuth } from "./context/AuthContext";
 import { useSalesOverview } from "./hooks/useSalesOverview";
@@ -23,8 +21,11 @@ import "./App.css";
 function Dashboard() {
   const { loading, error, data, refetch } = useSalesOverview();
 
+  // Só os dois KPIs com fonte de dados real (Supabase, useSalesOverview) —
+  // Lucro Operacional/Margem Operacional/Fluxo de Caixa eram fictícios
+  // (sem tabela de custos/caixa real por trás) e foram removidos.
   const kpiCards = useMemo(() => {
-    if (!data) return staticKpiCards;
+    if (!data) return [];
 
     const revenueCard = {
       id: "revenue",
@@ -48,7 +49,7 @@ function Dashboard() {
       sparkline: [1, 1], // no daily customers series yet
     };
 
-    return [revenueCard, ...staticKpiCards, customersCard];
+    return [revenueCard, customersCard];
   }, [data]);
 
   return (
@@ -69,7 +70,7 @@ function Dashboard() {
 
       <section className="kpi-grid">
         {loading
-          ? Array.from({ length: 5 }).map((_, i) => <div key={i} className="kpi-card kpi-card--skeleton" />)
+          ? Array.from({ length: 2 }).map((_, i) => <div key={i} className="kpi-card kpi-card--skeleton" />)
           : kpiCards.map((kpi) => <KpiCard key={kpi.id} {...kpi} />)}
       </section>
 
@@ -82,7 +83,6 @@ function Dashboard() {
           deltaPct={data?.revenueDeltaPct ?? 0}
         />
         <ChannelDonut channels={data?.channelBreakdown ?? []} total={data?.revenueMtd ?? 0} />
-        <AlertsPanel />
       </section>
     </main>
   );
@@ -143,7 +143,11 @@ function App() {
     if (active === "operacao-rotina") return <OperacaoPage scope="rotina" />;
     if (active === "telemetria") return <TelemetriaPage />;
     if (active === "operacao-completa") return <OperacaoCompletaPage />;
-    return <ComingSoon label={activeNavItem?.label ?? "Módulo"} icon={activeNavItem?.icon ?? "gear"} />;
+    // Todo id em navItems cai em um dos ramos acima ou em "administracao" —
+    // nunca deveria chegar aqui na prática (não existe mais módulo
+    // "em breve" sem fonte de dados real); mantido só como rede de
+    // segurança caso o estado "active" fique com um id inesperado.
+    return <AccessDenied label={activeNavItem?.label ?? "este módulo"} />;
   }
 
   return (

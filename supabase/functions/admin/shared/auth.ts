@@ -8,16 +8,11 @@ import { ControlledError } from "./http.ts";
 // service/usersService.ts), nunca persistido "no escuro".
 export const ASSIGNABLE_MODULE_IDS = new Set([
   "overview",
-  "clientes",
   "ativos",
   "operacao-chamados",
   "operacao-rotina",
   "telemetria",
   "operacao-completa",
-  "logistica",
-  "financeiro",
-  "newbusiness",
-  "posvenda",
 ]);
 
 export interface CallerInfo {
