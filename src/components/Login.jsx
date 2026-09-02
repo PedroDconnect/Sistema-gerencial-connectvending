@@ -20,9 +20,9 @@ export function Login() {
   return (
     <div className="login-screen">
       <form className="login-card" onSubmit={handleSubmit}>
-        <span className="sidebar__logo login-card__logo">
-          <img src="/favicon.svg" alt="Connect Vending" />
-        </span>
+        <div className="login-card__brand">
+          <img src="/logo.png" alt="Connect Vending" />
+        </div>
         <h1 className="login-card__title">Painel Gerencial</h1>
         <p className="login-card__subtitle">Entre com sua conta para acessar o dashboard executivo.</p>
 

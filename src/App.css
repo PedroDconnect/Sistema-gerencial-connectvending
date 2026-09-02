@@ -896,10 +896,23 @@
   align-items: center;
   gap: 14px;
 }
-.login-card__logo {
-  width: 40px;
-  height: 40px;
-  border-radius: 12px;
+/* Fundo escuro fixo (não segue --card-bg do tema) porque a logo é branca
+   sobre transparente — mesmo raciocínio do fundo oliva embutido no
+   favicon.svg: a marca tem apresentação própria, independente do tema
+   claro/escuro da UI ao redor. */
+.login-card__brand {
+  width: 100%;
+  max-width: 200px;
+  padding: 16px 18px;
+  border-radius: var(--radius-md);
+  background: #2e2e2c;
+  display: grid;
+  place-items: center;
+}
+.login-card__brand img {
+  width: 100%;
+  height: auto;
+  display: block;
 }
 .login-card__title {
   font-size: 18px;
