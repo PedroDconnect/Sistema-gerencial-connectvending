@@ -141,6 +141,12 @@ export function OrderDetailModal({ orderId, onClose }) {
                             </span>
                           )}
                         </div>
+                        {form.status === "ERROR" && form.lastError && (
+                          <p className="form-field__error" style={{ marginTop: 6, maxWidth: 420 }}>
+                            {form.lastError.step === "attach" ? "Falha ao anexar documento: " : ""}
+                            {form.lastError.message}
+                          </p>
+                        )}
                       </div>
                       <div className="admin-users__actions">
                         {form.documentPath && (

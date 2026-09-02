@@ -1,7 +1,7 @@
 import { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { ControlledError } from "../shared/http.ts";
 import { CallerInfo } from "../shared/auth.ts";
-import { writeLog } from "./logService.ts";
+import { writeLog, getLastErrorsByForm, FormLastError } from "./logService.ts";
 import { getActiveTemplate, TemplateRow } from "./templatesService.ts";
 import { sendFormToAuvo, regenerateDocument, toFormRow, FormRow, OrderContext } from "./formsService.ts";
 import { readAuvoCredentials } from "../integrations/auvo/auvo.config.ts";
@@ -17,13 +17,19 @@ export interface OrderListRow {
   createdAt: string;
 }
 
+export interface OrderDetailFormRow extends FormRow {
+  // Preenchido só quando status === "ERROR" (spec do usuário, 02/09/2026:
+  // a tela precisa mostrar POR QUE falhou, não só o badge "Erro").
+  lastError: FormLastError | null;
+}
+
 export interface OrderDetailRow extends OrderListRow {
   customerId: number;
   auvoCustomerId: number;
   requestedByName: string | null;
   requestedByEmail: string | null;
   updatedAt: string;
-  forms: FormRow[];
+  forms: OrderDetailFormRow[];
 }
 
 function pad(n: number): string {
@@ -69,7 +75,12 @@ export async function getOrderDetail(db: SupabaseClient, orderId: string): Promi
   if (error) throw new ControlledError(`Falha ao consultar pedido: ${error.message}`, 502);
   if (!data) throw new ControlledError("Pedido não encontrado.", 404);
 
-  const forms = ((data.preparation_forms as Record<string, unknown>[]) ?? []).map(toFormRow).sort((a, b) => a.sequence - b.sequence);
+  const lastErrors = await getLastErrorsByForm(db, orderId);
+  const forms: OrderDetailFormRow[] = ((data.preparation_forms as Record<string, unknown>[]) ?? [])
+    .map(toFormRow)
+    .sort((a, b) => a.sequence - b.sequence)
+    .map((form) => ({ ...form, lastError: form.status === "ERROR" ? (lastErrors.get(form.id) ?? null) : null }));
+
   return {
     ...toOrderListRow(data),
     customerId: data.customer_id as number,

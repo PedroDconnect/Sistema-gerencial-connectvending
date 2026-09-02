@@ -47,3 +47,40 @@ export async function writeLog(
     // intencional: log nunca deve quebrar o fluxo principal
   }
 }
+
+export interface FormLastError {
+  step: string | null;
+  message: string;
+  createdAt: string;
+}
+
+// Pedido explícito do usuário (02/09/2026): a tela de detalhe mostrava só
+// o badge "Erro" sem dizer por quê, obrigando a consultar preparation_logs
+// direto no banco pra descobrir. Isso resolve isso — devolve o ERROR mais
+// recente de cada ficha do pedido, pronto pra exibir na UI. 1 query pro
+// pedido inteiro (não 1 por ficha): busca todo ERROR do pedido de uma vez
+// e reduz em memória, já que o volume por pedido é sempre pequeno
+// (algumas fichas, não milhares de linhas).
+export async function getLastErrorsByForm(db: SupabaseClient, orderId: string): Promise<Map<string, FormLastError>> {
+  const { data, error } = await db
+    .from("preparation_logs")
+    .select("preparation_form_id, metadata, created_at")
+    .eq("preparation_order_id", orderId)
+    .eq("action", "ERROR")
+    .not("preparation_form_id", "is", null)
+    .order("created_at", { ascending: false });
+  if (error) return new Map(); // não bloqueia a tela de detalhe por causa disso
+
+  const byForm = new Map<string, FormLastError>();
+  for (const row of data ?? []) {
+    const formId = row.preparation_form_id as string;
+    if (byForm.has(formId)) continue; // já pegou o mais recente (ordenado desc)
+    const metadata = (row.metadata as Record<string, unknown>) ?? {};
+    byForm.set(formId, {
+      step: typeof metadata.step === "string" ? metadata.step : null,
+      message: typeof metadata.message === "string" ? metadata.message : "Falha desconhecida.",
+      createdAt: row.created_at as string,
+    });
+  }
+  return byForm;
+}
