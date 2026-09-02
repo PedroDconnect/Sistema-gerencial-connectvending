@@ -11,7 +11,7 @@ export function KpiCard({ label, value, delta, direction, icon, accent, sparklin
           {mock && <span className="kpi-card__mock-tag" title="Ainda sem fonte de dados real">simulado</span>}
         </span>
         <span className="kpi-card__icon" style={{ background: `color-mix(in srgb, ${color} 16%, transparent)`, color }}>
-          <Icon name={icon} size={18} />
+          <Icon name={icon} size={20} />
         </span>
       </div>
       <div className="kpi-card__value">{value}</div>

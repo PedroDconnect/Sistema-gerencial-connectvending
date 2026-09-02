@@ -34,7 +34,7 @@ function visibleNavItems(isAdmin, hasModuleAccess) {
     .filter(Boolean);
 }
 
-export function Sidebar({ active, onNavigate }) {
+export function Sidebar({ active, onNavigate, collapsed = false, onToggleCollapse }) {
   const { user, signOut, isAdmin, hasModuleAccess } = useAuth();
   const [theme, setTheme] = useTheme();
   const [menuOpen, setMenuOpen] = useState(false);
@@ -51,15 +51,24 @@ export function Sidebar({ active, onNavigate }) {
   }
 
   return (
-    <aside className="sidebar">
+    <aside className={`sidebar ${collapsed ? "sidebar--collapsed" : ""}`}>
       <div className="sidebar__brand">
         <span className="sidebar__logo">
           <Icon name="bolt" size={20} />
         </span>
-        <div>
+        <div className="sidebar__brand-text">
           <div className="sidebar__title">Painel Gerencial</div>
           <div className="sidebar__subtitle">Dashboard Executivo</div>
         </div>
+        <button
+          type="button"
+          className="sidebar__collapse"
+          onClick={onToggleCollapse}
+          aria-label={collapsed ? "Expandir menu" : "Recolher menu"}
+          title={collapsed ? "Expandir menu" : "Recolher menu"}
+        >
+          <Icon name={collapsed ? "chevronsRight" : "chevronsLeft"} size={16} />
+        </button>
       </div>
 
       <div className="theme-switch" role="group" aria-label="Tema da interface">
@@ -84,6 +93,7 @@ export function Sidebar({ active, onNavigate }) {
                 type="button"
                 className={`sidebar__link ${active === item.id ? "is-active" : ""}`}
                 onClick={() => onNavigate(item.id)}
+                title={collapsed ? item.label : undefined}
               >
                 <Icon name={item.icon} size={18} />
                 <span>{item.label}</span>
@@ -101,12 +111,16 @@ export function Sidebar({ active, onNavigate }) {
                 className={`sidebar__link sidebar__link--group ${hasActiveChild ? "is-active" : ""}`}
                 onClick={() => handleGroupClick(item)}
                 aria-expanded={isOpen}
+                title={collapsed ? item.label : undefined}
               >
                 <Icon name={item.icon} size={18} />
                 <span>{item.label}</span>
                 <Icon name="chevronDown" size={14} className={`sidebar__group-chevron ${isOpen ? "is-open" : ""}`} />
               </button>
-              {isOpen && (
+              {/* Recolhida, a sidebar vira um trilho de ícones: o submenu
+                  sempre existe no DOM e aparece como flyout no hover (CSS).
+                  Expandida, segue o acordeão controlado por openGroup. */}
+              {(isOpen || collapsed) && (
                 <div className="sidebar__submenu">
                   {item.children.map((child) => (
                     <button
@@ -128,7 +142,12 @@ export function Sidebar({ active, onNavigate }) {
 
       <div className="sidebar__footer">
         <div className="sidebar__profile-wrap">
-          <button type="button" className="sidebar__profile" onClick={() => setMenuOpen((v) => !v)}>
+          <button
+            type="button"
+            className="sidebar__profile"
+            onClick={() => setMenuOpen((v) => !v)}
+            title={collapsed ? (user?.email ?? undefined) : undefined}
+          >
             <span className="sidebar__avatar">{initials}</span>
             <span className="sidebar__profile-text">
               <span className="sidebar__profile-name">{user?.email ?? "Carlos Mendes"}</span>

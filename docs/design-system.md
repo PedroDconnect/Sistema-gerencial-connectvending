@@ -172,6 +172,9 @@ está coberta.
 **Sidebar** (`src/components/Sidebar.jsx`, `.sidebar`): fundo `--sidebar-bg`,
 suporta grupos expansíveis (usado por "Operação", que agrupa Telemetria +
 Operação Completa + Tarefas) — item pai com seta, filhos indentados.
+Recolhível pelo botão no topo (`.sidebar--collapsed`, estado persistido em
+`localStorage` via `useSidebarCollapsed`): vira um trilho de 64px só com
+ícones, e os grupos abrem como flyout no hover em vez do acordeão inline.
 
 **Header/Topbar** (`.topbar`): título + subtítulo à esquerda
 (`.topbar__title`/`.topbar__subtitle`), ações à direita (`.topbar__actions`) —
@@ -199,6 +202,10 @@ módulo de dados (Telemetria, Operação Completa) segue esse padrão.
 animado, não um spinner). Grades de KPI (`.kpi-grid`, `.ativos-kpi-grid`,
 `.operacao-kpi-grid`) são sempre `display:grid` responsivo (3 colunas em
 telas médias, 2 em mobile).
+
+Os cards de KPI da Visão Geral (`.kpi-card`) usam o valor no tamanho hero
+(`--text-2xl`, 28px) com padding 20px — são o número principal do painel,
+não um KPI denso de tabela.
 
 ---
 

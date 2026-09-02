@@ -3,6 +3,10 @@
   display: grid;
   grid-template-columns: 240px 1fr;
   min-height: 100vh;
+  transition: grid-template-columns 160ms ease;
+}
+.app-shell--sidebar-collapsed {
+  grid-template-columns: 64px 1fr;
 }
 
 .main {
@@ -323,6 +327,114 @@
   margin-top: 2px;
 }
 
+/* ---------- Sidebar: botão recolher + estado recolhido ---------- */
+.sidebar__brand-text {
+  min-width: 0;
+}
+.sidebar__collapse {
+  margin-left: auto;
+  flex-shrink: 0;
+  width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  border-radius: 7px;
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+}
+.sidebar__collapse:hover {
+  background: var(--card-bg-raised);
+  color: var(--text-primary);
+}
+
+.sidebar--collapsed {
+  padding-left: 10px;
+  padding-right: 10px;
+}
+.sidebar--collapsed .sidebar__brand {
+  flex-direction: column;
+  gap: 14px;
+  padding: 0 0 20px;
+}
+.sidebar--collapsed .sidebar__brand-text {
+  display: none;
+}
+.sidebar--collapsed .sidebar__collapse {
+  margin-left: 0;
+}
+.sidebar--collapsed .theme-switch {
+  display: none;
+}
+.sidebar--collapsed .sidebar__link {
+  justify-content: center;
+  gap: 0;
+  padding: 10px 0;
+}
+.sidebar--collapsed .sidebar__link > span {
+  display: none;
+}
+.sidebar--collapsed .sidebar__group-chevron {
+  display: none;
+}
+
+/* Grupo recolhido: submenu vira flyout no hover, não acordeão inline */
+.sidebar--collapsed .sidebar__group {
+  position: relative;
+}
+.sidebar--collapsed .sidebar__submenu {
+  position: absolute;
+  left: calc(100% + 10px);
+  top: 0;
+  margin: 0;
+  padding: 6px;
+  min-width: 196px;
+  border: 1px solid var(--border-hairline-strong);
+  border-radius: var(--radius-sm);
+  background: var(--card-bg-raised);
+  box-shadow: 0 10px 24px -8px rgba(0, 0, 0, 0.35);
+  z-index: 30;
+  display: none;
+}
+/* Ponte invisível sobre o vão entre o trilho e o flyout — sem isso o
+   hover "cai" ao mover o mouse do ícone pro submenu. */
+.sidebar--collapsed .sidebar__submenu::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: -12px;
+  width: 12px;
+  height: 100%;
+}
+.sidebar--collapsed .sidebar__group:hover .sidebar__submenu {
+  display: flex;
+}
+.sidebar--collapsed .sidebar__link--sub {
+  justify-content: flex-start;
+  gap: 10px;
+  padding: 8px 10px;
+}
+.sidebar--collapsed .sidebar__link--sub > span {
+  display: inline;
+}
+
+.sidebar--collapsed .sidebar__profile {
+  justify-content: center;
+  padding: 4px 0;
+}
+.sidebar--collapsed .sidebar__profile-text,
+.sidebar--collapsed .sidebar__profile > svg {
+  display: none;
+}
+.sidebar--collapsed .sidebar__menu {
+  left: 0;
+  right: auto;
+  min-width: 150px;
+}
+.sidebar--collapsed .sidebar__updated {
+  display: none;
+}
+
 /* ---------- Topbar ---------- */
 .topbar {
   display: flex;
@@ -435,7 +547,7 @@
 .kpi-grid {
   display: grid;
   grid-template-columns: repeat(5, 1fr);
-  gap: 16px;
+  gap: 18px;
 }
 
 .kpi-card {
@@ -443,7 +555,7 @@
   border: 1px solid var(--border-hairline);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-card);
-  padding: 16px;
+  padding: 20px;
   min-width: 0;
 }
 .kpi-card__top {
@@ -453,7 +565,7 @@
   gap: 8px;
 }
 .kpi-card__label {
-  font-size: 12.5px;
+  font-size: 13px;
   color: var(--text-muted);
   font-weight: 500;
   display: inline-flex;
@@ -472,22 +584,22 @@
   cursor: help;
 }
 .kpi-card__icon {
-  width: 30px;
-  height: 30px;
-  border-radius: 9px;
+  width: 36px;
+  height: 36px;
+  border-radius: 11px;
   display: grid;
   place-items: center;
   flex-shrink: 0;
 }
 .kpi-card__value {
-  font-size: 24px;
+  font-size: 28px;
   font-weight: 700;
-  margin-top: 10px;
+  margin-top: 12px;
   letter-spacing: -0.01em;
   font-variant-numeric: tabular-nums;
 }
 .kpi-card--skeleton {
-  min-height: 118px;
+  min-height: 140px;
   background: linear-gradient(100deg, var(--card-bg) 40%, var(--card-bg-raised) 50%, var(--card-bg) 60%);
   background-size: 200% 100%;
   animation: skeleton-sweep 1.4s ease-in-out infinite;
@@ -506,7 +618,7 @@
   align-items: flex-end;
   justify-content: space-between;
   gap: 8px;
-  margin-top: 10px;
+  margin-top: 12px;
 }
 .kpi-card__delta {
   display: flex;
@@ -2242,7 +2354,8 @@
 }
 
 @media (max-width: 900px) {
-  .app-shell {
+  .app-shell,
+  .app-shell--sidebar-collapsed {
     grid-template-columns: 1fr;
   }
   .sidebar {

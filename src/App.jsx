@@ -17,6 +17,7 @@ import { staticKpiCards, navItems } from "./data/mockData";
 import { formatCompactCurrency, formatDeltaPct } from "./lib/format";
 import { useAuth } from "./context/AuthContext";
 import { useSalesOverview } from "./hooks/useSalesOverview";
+import { useSidebarCollapsed } from "./hooks/useSidebarCollapsed";
 import "./App.css";
 
 function Dashboard() {
@@ -113,6 +114,7 @@ function AccessDenied({ label }) {
 function App() {
   const { session, loading, configured, isAdmin, hasModuleAccess } = useAuth();
   const [active, setActive] = useState("overview");
+  const [sidebarCollapsed, toggleSidebar] = useSidebarCollapsed();
 
   if (!configured) {
     return <SetupNeeded />;
@@ -145,8 +147,13 @@ function App() {
   }
 
   return (
-    <div className="app-shell">
-      <Sidebar active={active} onNavigate={setActive} />
+    <div className={`app-shell ${sidebarCollapsed ? "app-shell--sidebar-collapsed" : ""}`}>
+      <Sidebar
+        active={active}
+        onNavigate={setActive}
+        collapsed={sidebarCollapsed}
+        onToggleCollapse={toggleSidebar}
+      />
       {renderContent()}
     </div>
   );
