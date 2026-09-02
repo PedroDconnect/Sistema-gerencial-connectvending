@@ -1,29 +1,22 @@
-import { useCallback, useEffect, useState } from "react";
+import { useMemo } from "react";
 import { fetchOperation } from "../lib/operationApi";
+import { useCachedResource } from "./useCachedResource";
+
+// Pedido explícito: reconsulta sozinho a cada 10 min, e mostra o último
+// resultado bom (localStorage) ao reabrir a página em vez de esperar rede.
+const AUTO_REFRESH_MS = 10 * 60 * 1000;
 
 export function useMachineConsumption(auvoEquipmentId, params) {
-  const [state, setState] = useState({ loading: true, error: null, data: null });
   const key = JSON.stringify(params);
+  const cacheKey = `painel-gerencial:machine-consumption:${auvoEquipmentId}:${key}`;
+  // key (não params) na dependência: params é um objeto novo a cada
+  // render de quem chama, mas o conteúdo (mesmo equipamento + mesmo
+  // período) é o que importa pra decidir se refaz o fetcher — mesmo
+  // padrão já usado em useOperacaoBreakdown.js e afins (warning esperado).
+  const fetcher = useMemo(() => () => fetchOperation(`/machines/${auvoEquipmentId}/consumption`, params), [auvoEquipmentId, key]);
 
-  const load = useCallback(() => {
-    if (!auvoEquipmentId) return undefined;
-    let cancelled = false;
-    setState((prev) => ({ ...prev, loading: true, error: null }));
-
-    fetchOperation(`/machines/${auvoEquipmentId}/consumption`, params)
-      .then((data) => {
-        if (!cancelled) setState({ loading: false, error: null, data });
-      })
-      .catch((error) => {
-        if (!cancelled) setState({ loading: false, error, data: null });
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [auvoEquipmentId, key]);
-
-  useEffect(() => load(), [load]);
-
-  return { ...state, refetch: load };
+  return useCachedResource(cacheKey, fetcher, {
+    autoRefreshMs: AUTO_REFRESH_MS,
+    enabled: Boolean(auvoEquipmentId),
+  });
 }
