@@ -82,3 +82,12 @@ export function fetchPreparationTemplateVersions() {
 export function createPreparationTemplateVersion(fields) {
   return request("/admin/templates", { method: "POST", body: JSON.stringify({ fields }) });
 }
+
+// "Solicitar Visita Técnica" (spec 4.1) — ticket simples, sem ficha/PDF.
+export function fetchTicketRequestTypes() {
+  return request("/ticket-request-types");
+}
+
+export function createTechnicalVisit(input) {
+  return request("/technical-visits", { method: "POST", body: JSON.stringify(input) });
+}

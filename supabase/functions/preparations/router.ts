@@ -5,6 +5,7 @@ import { handleListOrders, handleGetOrder, handleCreateOrder, handleRetryForm, h
 import { handleSearchCustomers, handleCreateCustomer } from "./handlers/customers.ts";
 import { handleGetActiveTemplate, handleListTemplateVersions, handleCreateTemplateVersion } from "./handlers/templates.ts";
 import { handleGetFormDocument } from "./handlers/documents.ts";
+import { handleListRequestTypes, handleCreateTechnicalVisit } from "./handlers/technicalVisits.ts";
 
 // Mesmo padrão de dispatch manual de admin/router.ts e operation/router.ts:
 // Supabase casa só o primeiro segmento ("preparations") com esta function,
@@ -40,6 +41,15 @@ export async function route(req: Request, db: SupabaseClient): Promise<Response>
     if (subPath[0] === "customers" && !subPath[1]) {
       if (req.method === "GET") return await handleSearchCustomers(db, url);
       if (req.method === "POST") return await handleCreateCustomer(db, req);
+    }
+
+    // "Solicitar Visita Técnica" (spec 4.1, segunda opção do "+ Abrir
+    // chamado") — ticket simples na Auvo, sem ficha/pedido/PDF.
+    if (subPath[0] === "ticket-request-types" && !subPath[1] && req.method === "GET") {
+      return await handleListRequestTypes(db);
+    }
+    if (subPath[0] === "technical-visits" && !subPath[1] && req.method === "POST") {
+      return await handleCreateTechnicalVisit(db, caller, req);
     }
 
     if (subPath[0] && subPath[1] === "forms" && subPath[2] && subPath[3] === "send") {

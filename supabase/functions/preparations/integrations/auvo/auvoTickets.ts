@@ -20,9 +20,11 @@ export interface CreateTicketInput {
   title: string;
   description: string;
   customerId: number;
+  requestTypeId: number;
+  statusId?: number; // omitido: Auvo usa o status padrão do tipo de solicitação escolhido
   requesterName: string;
   requesterEmail: string;
-  externalId: string; // determinístico: "PREP-2026-000145-F01" (spec 9.4)
+  externalId?: string; // determinístico quando existe (ex.: "PREP-2026-000145-F01", spec 9.4) — Visita Técnica não tem
   attachment?: TicketAttachment;
 }
 
@@ -32,14 +34,16 @@ export interface CreateTicketResult {
   statusName: string | null;
 }
 
-// requestTypeId/statusId fixos pedidos explicitamente na spec (seção 9.3):
-// 47652 = "Pedidos de Preparação de máquinas", 97758 = "Aguardando
-// atendimento". Se a Auvo reconfigurar esses IDs (fluxo administrativo
-// deles, fora deste projeto) e a criação de ticket passar a falhar por
+// requestTypeId/statusId de Pedido de Preparação, pedidos explicitamente
+// na spec (seção 9.3): 47652 = "Pedidos de Preparação de máquinas", 97758
+// = "Aguardando atendimento". createTicket em si é genérico (usado também
+// por Visita Técnica, com requestTypeId escolhido na tela, sem esses
+// valores fixos) — só quem chama pra Pedido de Preparação usa essas duas
+// constantes. Se a criação de ticket de preparação passar a falhar por
 // "tipo/status inválido", confirmar os valores reais em
 // GET /tickets/request-type e GET /tickets/status.
-const PREPARATION_REQUEST_TYPE_ID = 47652;
-const AWAITING_SERVICE_STATUS_ID = 97758;
+export const PREPARATION_REQUEST_TYPE_ID = 47652;
+export const AWAITING_SERVICE_STATUS_ID = 97758;
 const DEFAULT_PRIORITY = 1;
 
 function toBase64(bytes: Uint8Array): string {
@@ -68,13 +72,13 @@ export async function createTicket(db: SupabaseClient, creds: AuvoCredentials, i
     body: {
       title: input.title,
       description: input.description,
-      requestTypeId: PREPARATION_REQUEST_TYPE_ID,
-      statusId: AWAITING_SERVICE_STATUS_ID,
+      requestTypeId: input.requestTypeId,
+      ...(input.statusId !== undefined ? { statusId: input.statusId } : {}),
       requesterName: input.requesterName,
       requesterEmail: input.requesterEmail,
       customerId: input.customerId,
       priority: DEFAULT_PRIORITY,
-      externalId: input.externalId,
+      ...(input.externalId ? { externalId: input.externalId } : {}),
       ...(input.attachment ? { attachments: [toAttachmentPayload(input.attachment)] } : {}),
     },
   });
@@ -144,4 +148,23 @@ export async function syncTicketStatus(db: SupabaseClient, creds: AuvoCredential
     taskStatusName: (task?.statusName as string) ?? null,
     assigneeName: (task?.assigneeName as string) ?? (task?.responsibleName as string) ?? null,
   };
+}
+
+export interface TicketRequestType {
+  id: number;
+  name: string;
+}
+
+// GET /tickets/request-type (doc real) — usado pela tela de "Solicitar
+// Visita Técnica" (pedido do usuário, 02/09/2026): esse fluxo não tem um
+// requestTypeId fixo como Pedido de Preparação, então o tipo de
+// solicitação é escolhido na hora, direto da lista real da conta Auvo —
+// nunca inventado/hardcoded.
+export async function listRequestTypes(db: SupabaseClient, creds: AuvoCredentials): Promise<TicketRequestType[]> {
+  const payload = await auvoRequest(db, creds, `${AUVO_TICKETS_PATH}/request-type`);
+  const items = (payload.result as Record<string, unknown>[]) ?? [];
+  return items.map((item) => ({
+    id: item.id as number,
+    name: (item.name as string) ?? (item.description as string) ?? `Tipo #${item.id}`,
+  }));
 }

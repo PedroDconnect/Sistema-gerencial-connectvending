@@ -6,7 +6,7 @@ import { getTemplateById } from "./templatesService.ts";
 import { generatePreparationFormPdf } from "./pdfService.ts";
 import { uploadDocument, downloadDocument } from "./storageService.ts";
 import { readAuvoCredentials } from "../integrations/auvo/auvo.config.ts";
-import { createTicket, tryReattachDocument } from "../integrations/auvo/auvoTickets.ts";
+import { createTicket, tryReattachDocument, PREPARATION_REQUEST_TYPE_ID, AWAITING_SERVICE_STATUS_ID } from "../integrations/auvo/auvoTickets.ts";
 
 export interface FormRow {
   id: string;
@@ -130,6 +130,8 @@ export async function sendFormToAuvo(
         title: `Preparação de máquina - ${order.customerName} - ${form.internalLocation}`,
         description: `Pedido ${order.code} - Ficha ${pad(form.sequence)}/${pad(order.formCount)}`,
         customerId: order.auvoCustomerId,
+        requestTypeId: PREPARATION_REQUEST_TYPE_ID,
+        statusId: AWAITING_SERVICE_STATUS_ID,
         requesterName: order.requestedByName ?? caller?.name ?? caller?.email ?? "",
         requesterEmail: order.requestedByEmail ?? caller?.email ?? "",
         externalId: form.externalId,

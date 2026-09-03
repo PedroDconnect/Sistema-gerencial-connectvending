@@ -1,7 +1,9 @@
 import { useState } from "react";
 import { Icon } from "../Icon";
 import { usePreparationOrders } from "../../hooks/usePreparationOrders";
+import { OpenTicketChooser } from "./OpenTicketChooser";
 import { NewOrderWizard } from "./NewOrderWizard";
+import { TechnicalVisitModal } from "./TechnicalVisitModal";
 import { OrderDetailModal } from "./OrderDetailModal";
 
 const ORDER_STATUS_LABEL = {
@@ -23,13 +25,16 @@ function statusBadgeVariant(status) {
 }
 
 // Tela principal do módulo (spec seção 13.1): tabela Pedido/Cliente/
-// Fichas/Tickets/Status + "+ Novo Pedido" abrindo o wizard.
+// Fichas/Tickets/Status. "+ Abrir chamado" (spec 4.1) leva a um chooser —
+// "Solicitar Visita Técnica" (ticket simples, sem ficha) ou "Pedido de
+// Preparação" (o wizard completo) — em vez de ir direto pro wizard.
 export function PreparationOrdersPage() {
   const [page, setPage] = useState(1);
   const pageSize = 20;
   const { loading, error, items, total, refetch } = usePreparationOrders(page, pageSize);
-  const [showWizard, setShowWizard] = useState(false);
+  const [modalMode, setModalMode] = useState(null); // null | "choose" | "order" | "visit"
   const [openOrderId, setOpenOrderId] = useState(null);
+  const [visitSuccess, setVisitSuccess] = useState(null);
 
   return (
     <main className="main">
@@ -39,9 +44,9 @@ export function PreparationOrdersPage() {
           <p className="topbar__subtitle">Cada ficha do pedido vira 1 documento + 1 ticket próprio na Auvo.</p>
         </div>
         <div className="topbar__actions">
-          <button type="button" className="btn btn--primary" onClick={() => setShowWizard(true)}>
+          <button type="button" className="btn btn--primary" onClick={() => setModalMode("choose")}>
             <Icon name="clipboard" size={16} />
-            Novo pedido
+            Abrir chamado
           </button>
         </div>
       </header>
@@ -54,6 +59,15 @@ export function PreparationOrdersPage() {
           </div>
           <button type="button" className="btn btn--primary" onClick={refetch}>
             Tentar novamente
+          </button>
+        </div>
+      )}
+
+      {visitSuccess && (
+        <div className="state-warning-block" style={{ borderColor: "var(--status-good)" }}>
+          <strong>Chamado #{visitSuccess.ticketId} aberto na Auvo.</strong>
+          <button type="button" className="link-btn" onClick={() => setVisitSuccess(null)}>
+            Fechar
           </button>
         </div>
       )}
@@ -111,13 +125,31 @@ export function PreparationOrdersPage() {
         </div>
       )}
 
-      {showWizard && (
+      {modalMode === "choose" && (
+        <OpenTicketChooser
+          onClose={() => setModalMode(null)}
+          onChooseVisit={() => setModalMode("visit")}
+          onChooseOrder={() => setModalMode("order")}
+        />
+      )}
+
+      {modalMode === "order" && (
         <NewOrderWizard
-          onClose={() => setShowWizard(false)}
+          onClose={() => setModalMode(null)}
           onCreated={(order) => {
-            setShowWizard(false);
+            setModalMode(null);
             refetch();
             setOpenOrderId(order.id);
+          }}
+        />
+      )}
+
+      {modalMode === "visit" && (
+        <TechnicalVisitModal
+          onClose={() => setModalMode(null)}
+          onCreated={(result) => {
+            setModalMode(null);
+            setVisitSuccess(result);
           }}
         />
       )}
