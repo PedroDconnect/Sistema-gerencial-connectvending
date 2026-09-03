@@ -13,7 +13,10 @@ export interface TemplateRow {
 }
 
 const TEMPLATE_NAME = "Ficha de preparação Connect Vending";
-const ALLOWED_FIELD_TYPES = new Set(["text", "textarea", "number", "date", "email", "single_select", "multi_select", "boolean"]);
+// "time" adicionado no addendum de 02/09/2026 — convite de agenda
+// (seção 7) usa horário opcional junto da Previsão de instalação.
+const ALLOWED_FIELD_TYPES = new Set(["text", "textarea", "number", "date", "time", "email", "single_select", "multi_select", "boolean"]);
+const CONDITION_OPS = new Set(["eq", "neq", "in", "notIn"]);
 
 function toTemplateRow(row: Record<string, unknown>): TemplateRow {
   return {
@@ -64,6 +67,32 @@ export async function listTemplateVersions(db: SupabaseClient): Promise<Template
   return (data ?? []).map(toTemplateRow);
 }
 
+// Validação frouxa de propósito: visibleIf/optionRules são o "modo
+// avançado" da tela de admin (editado como JSON cru, ver
+// PreparationTemplateSettingsPage.jsx) — melhor aceitar um shape razoável
+// e ignorar entrada claramente inválida do que travar o salvamento do
+// template inteiro por um detalhe de uma condição.
+function sanitizeConditions(raw: unknown): { field: string; op: string; value: unknown }[] | undefined {
+  if (!Array.isArray(raw)) return undefined;
+  const out = raw
+    .map((c) => c as Record<string, unknown>)
+    .filter((c) => typeof c?.field === "string" && typeof c?.op === "string" && CONDITION_OPS.has(c.op as string))
+    .map((c) => ({ field: c.field as string, op: c.op as string, value: c.value }));
+  return out.length > 0 ? out : undefined;
+}
+
+function sanitizeOptionRules(raw: unknown): { when: { field: string; op: string; value: unknown }[]; removeOptions: string[] }[] | undefined {
+  if (!Array.isArray(raw)) return undefined;
+  const out = raw
+    .map((r) => r as Record<string, unknown>)
+    .map((r) => ({
+      when: sanitizeConditions(r?.when) ?? [],
+      removeOptions: Array.isArray(r?.removeOptions) ? (r.removeOptions as unknown[]).filter((o): o is string => typeof o === "string") : [],
+    }))
+    .filter((r) => r.when.length > 0 && r.removeOptions.length > 0);
+  return out.length > 0 ? out : undefined;
+}
+
 function validateFields(fields: unknown): TemplateField[] {
   if (!Array.isArray(fields) || fields.length === 0) {
     throw new ControlledError("O template precisa de pelo menos 1 campo.", 400);
@@ -82,6 +111,8 @@ function validateFields(fields: unknown): TemplateField[] {
     if ((type === "single_select" || type === "multi_select") && (!options || options.length === 0)) {
       throw new ControlledError(`Campo "${key}" (${type}) precisa de pelo menos 1 opção.`, 400);
     }
+    const visibleIf = sanitizeConditions(field.visibleIf);
+    const optionRules = sanitizeOptionRules(field.optionRules);
     return {
       key,
       label,
@@ -89,7 +120,9 @@ function validateFields(fields: unknown): TemplateField[] {
       required: Boolean(field.required),
       perForm: Boolean(field.perForm),
       ...(options ? { options } : {}),
-    };
+      ...(visibleIf ? { visibleIf } : {}),
+      ...(optionRules ? { optionRules } : {}),
+    } as TemplateField;
   });
 }
 

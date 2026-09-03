@@ -4,6 +4,7 @@ import { CallerInfo } from "../shared/auth.ts";
 import { writeLog, getLastErrorsByForm, FormLastError } from "./logService.ts";
 import { getActiveTemplate, TemplateRow } from "./templatesService.ts";
 import { sendFormToAuvo, regenerateDocument, toFormRow, FormRow, OrderContext } from "./formsService.ts";
+import { isFieldVisible } from "./fieldRules.ts";
 import { readAuvoCredentials } from "../integrations/auvo/auvo.config.ts";
 import { syncTicketStatus } from "../integrations/auvo/auvoTickets.ts";
 
@@ -143,10 +144,31 @@ function requireNonEmpty(value: unknown): boolean {
 // como qualquer outro).
 function validateMergedForm(template: TemplateRow, merged: Record<string, unknown>, formLabel: string): void {
   for (const field of template.schema.fields) {
+    // Campo oculto pra esse merge (ex.: "Preparo da bebida" numa
+    // categoria sem sistema de preparo) nunca é obrigatório, mesmo
+    // marcado required no template — addendum 02/09/2026, spec seção 8.
+    if (!isFieldVisible(field, merged)) continue;
     if (field.required && !requireNonEmpty(merged[field.key])) {
       throw new ControlledError(`${formLabel}: campo obrigatório "${field.label}" não preenchido.`, 400);
     }
   }
+}
+
+// "nenhum campo abaixo é solicitado nem gravado" (addendum, seção 5) —
+// não basta esconder na tela, o form_data persistido também não pode
+// conter valor de campo oculto pra esse merge. Reconstrói só com as
+// chaves do template que estão visíveis, descartando qualquer coisa que
+// não seja uma chave conhecida de propósito (mesmo espírito de
+// validateModules em admin/service/usersService.ts: nunca persiste o que
+// não é explicitamente permitido).
+function stripHiddenFields(template: TemplateRow, merged: Record<string, unknown>): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const field of template.schema.fields) {
+    if (field.key === "internal_location") continue; // tem coluna própria, não duplica em form_data
+    if (!isFieldVisible(field, merged)) continue;
+    if (field.key in merged) out[field.key] = merged[field.key];
+  }
+  return out;
 }
 
 export interface CreateOrderFormInput {
@@ -199,7 +221,7 @@ export async function createOrder(db: SupabaseClient, caller: CallerInfo, input:
     const overrides = form.overrides ?? {};
     const forValidation = { ...input.baseForm, internal_location: form.internalLocation, ...overrides };
     validateMergedForm(template, forValidation, `Ficha ${pad(index + 1)}`);
-    return { ...input.baseForm, ...overrides };
+    return stripHiddenFields(template, forValidation);
   });
 
   const requestedByName = input.requestedByName ?? caller.name ?? caller.email;

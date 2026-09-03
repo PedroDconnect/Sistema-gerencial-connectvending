@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Icon } from "../Icon";
 import { usePreparationOrder } from "../../hooks/usePreparationOrder";
 import { retryPreparationForm, syncPreparationOrderWithAuvo, getPreparationFormDocumentUrl } from "../../lib/preparationsApi";
+import { buildInstallationInvite, downloadIcs, buildOutlookComposeUrl } from "../../lib/calendarInvite";
 
 const STATUS_LABEL = {
   DRAFT: "Rascunho",
@@ -34,6 +35,28 @@ function statusBadgeVariant(status) {
 
 function pad(n) {
   return String(n).padStart(2, "0");
+}
+
+// Convite de agenda (addendum 02/09/2026, spec seção 7) — só aparece
+// quando a ficha tem Previsão de instalação preenchida ("ao preencher
+// Previsão de instalação... gerar automaticamente"). Cada ficha é 1
+// instalação própria (máquina/local diferentes), por isso o convite é
+// por ficha, não 1 só pro pedido inteiro.
+function inviteForForm(form, order) {
+  const fd = form.formData ?? {};
+  if (!fd.installation_forecast) return null;
+  return buildInstallationInvite({
+    contractNumber: fd.contract_number,
+    customerName: order.customerName,
+    date: fd.installation_forecast,
+    time: fd.installation_time,
+    address: fd.installation_address,
+    attendeeEmail: fd.contact_email,
+    internalLocation: form.internalLocation,
+    machineCategory: fd.machine_category,
+    machineModel: fd.machine_model,
+    businessModel: fd.business_model,
+  });
 }
 
 export function OrderDetailModal({ orderId, onClose }) {
@@ -125,7 +148,9 @@ export function OrderDetailModal({ orderId, onClose }) {
               </div>
 
               <ul className="metric-modal__customer-list">
-                {data.forms.map((form) => (
+                {data.forms.map((form) => {
+                  const invite = inviteForForm(form, data);
+                  return (
                   <li key={form.id} className="metric-modal__customer" style={{ padding: "12px 10px" }}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10 }}>
                       <div>
@@ -147,6 +172,20 @@ export function OrderDetailModal({ orderId, onClose }) {
                             {form.lastError.message}
                           </p>
                         )}
+                        {invite && (
+                          <div style={{ marginTop: 6, display: "flex", gap: 10 }}>
+                            <button
+                              type="button"
+                              className="link-btn"
+                              onClick={() => downloadIcs(invite, `instalacao-${form.externalId}.ics`)}
+                            >
+                              Baixar convite (.ics)
+                            </button>
+                            <a className="link-btn" href={buildOutlookComposeUrl(invite)} target="_blank" rel="noopener noreferrer">
+                              Abrir no Outlook
+                            </a>
+                          </div>
+                        )}
                       </div>
                       <div className="admin-users__actions">
                         {form.documentPath && (
@@ -162,7 +201,8 @@ export function OrderDetailModal({ orderId, onClose }) {
                       </div>
                     </div>
                   </li>
-                ))}
+                  );
+                })}
               </ul>
             </>
           )}

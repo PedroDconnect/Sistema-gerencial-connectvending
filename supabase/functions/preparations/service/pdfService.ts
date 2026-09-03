@@ -3,6 +3,13 @@
 // Deno via esm.sh sem dependência nativa — mesma convenção de import de
 // https://esm.sh/@supabase/supabase-js@2 já usada em toda function.
 import { PDFDocument, StandardFonts, rgb } from "https://esm.sh/pdf-lib@1.17.1";
+import { isFieldVisible } from "./fieldRules.ts";
+
+export interface FieldCondition {
+  field: string;
+  op: "eq" | "neq" | "in" | "notIn";
+  value: unknown;
+}
 
 export interface TemplateField {
   key: string;
@@ -11,6 +18,13 @@ export interface TemplateField {
   required?: boolean;
   perForm?: boolean;
   options?: string[];
+  // Addendum 02/09/2026 (ver fieldRules.ts): visibilidade condicional
+  // (ex.: campos de "Preparo da bebida" só pra categoria com sistema de
+  // preparo) e filtragem de opção (ex.: Acessórios por categoria/modelo
+  // de negócio). Ambos opcionais — campo sem essas chaves se comporta
+  // como sempre se comportou (sempre visível, opções fixas).
+  visibleIf?: FieldCondition[];
+  optionRules?: { when: FieldCondition[]; removeOptions: string[] }[];
 }
 
 export interface TemplateSchema {
@@ -93,6 +107,12 @@ export async function generatePreparationFormPdf(params: {
   cursorY -= 8;
 
   for (const field of schema.fields) {
+    // Campo oculto pra esse merge de valores (ex.: seção "Preparo da
+    // bebida" numa ficha de categoria Gabinete) nunca aparece no
+    // documento — mesmo critério usado na validação/gravação
+    // (ordersService.ts), aplicado de novo aqui como segunda camada.
+    if (!isFieldVisible(field, mergedValues)) continue;
+
     const label = field.label.toUpperCase();
     const value = formatValue(mergedValues[field.key]);
     const lines = wrapText(value, MAX_CHARS_PER_LINE);

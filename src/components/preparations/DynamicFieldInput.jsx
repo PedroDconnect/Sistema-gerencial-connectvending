@@ -53,6 +53,7 @@ export function DynamicFieldInput({ field, value, onChange }) {
     );
   }
 
-  const inputType = field.type === "email" ? "email" : field.type === "date" ? "date" : field.type === "number" ? "number" : "text";
+  const inputType =
+    field.type === "email" ? "email" : field.type === "date" ? "date" : field.type === "time" ? "time" : field.type === "number" ? "number" : "text";
   return <input {...commonProps} type={inputType} value={value ?? ""} onChange={(e) => onChange(e.target.value)} />;
 }

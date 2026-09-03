@@ -4,6 +4,7 @@ import { DynamicFieldInput } from "./DynamicFieldInput";
 import { CustomerSearchField } from "./CustomerSearchField";
 import { useActivePreparationTemplate } from "../../hooks/useActivePreparationTemplate";
 import { createPreparationOrder } from "../../lib/preparationsApi";
+import { visibleFieldsFor } from "../../lib/preparationFieldRules";
 
 const STEPS = ["customer", "quantity", "base", "forms", "review"];
 const STEP_LABELS = {
@@ -35,8 +36,14 @@ export function NewOrderWizard({ onClose, onCreated }) {
 
   const step = STEPS[stepIndex];
   const fields = template?.schema?.fields ?? [];
-  const baseFields = fields.filter((f) => !f.perForm);
-  const perFormFields = fields.filter((f) => f.perForm && f.key !== "internal_location");
+  const baseFieldsAll = fields.filter((f) => !f.perForm);
+  const perFormFieldsAll = fields.filter((f) => f.perForm && f.key !== "internal_location");
+  // Addendum 02/09/2026 (spec seção 8): campo pode depender de outro
+  // (ex.: "Preparo da bebida" só quando a Categoria da máquina tem
+  // sistema de preparo) — recalculado a cada render com os valores atuais,
+  // nunca uma lista fixa. baseFields usa só o que já foi preenchido no
+  // próprio passo "Dados do pedido" (ainda não há ficha nenhuma aqui).
+  const baseFields = visibleFieldsFor(baseFieldsAll, baseForm);
 
   // Redimensiona a lista de fichas quando a quantidade muda, preservando o
   // que já foi preenchido nas fichas que continuam existindo.
@@ -153,19 +160,29 @@ export function NewOrderWizard({ onClose, onCreated }) {
 
           {template && step === "forms" && (
             <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
-              {perFormFields.length > 0 && (
-                <div>
-                  <p className="form-field__hint">Valor padrão pros campos abaixo (pode ser ajustado por ficha):</p>
-                  {perFormFields.map((field) => (
-                    <label key={field.key} className="form-field" style={{ marginTop: 8 }}>
-                      <span className="form-field__label">{field.label}</span>
-                      <DynamicFieldInput field={field} value={sharedDefaults[field.key]} onChange={(v) => setSharedDefaults((prev) => ({ ...prev, [field.key]: v }))} />
-                    </label>
-                  ))}
-                </div>
-              )}
+              {(() => {
+                const sharedVisible = visibleFieldsFor(perFormFieldsAll, { ...baseForm, ...sharedDefaults });
+                return (
+                  sharedVisible.length > 0 && (
+                    <div>
+                      <p className="form-field__hint">Valor padrão pros campos abaixo (pode ser ajustado por ficha):</p>
+                      {sharedVisible.map((field) => (
+                        <label key={field.key} className="form-field" style={{ marginTop: 8 }}>
+                          <span className="form-field__label">{field.label}</span>
+                          <DynamicFieldInput field={field} value={sharedDefaults[field.key]} onChange={(v) => setSharedDefaults((prev) => ({ ...prev, [field.key]: v }))} />
+                        </label>
+                      ))}
+                    </div>
+                  )
+                );
+              })()}
 
-              {forms.map((form, index) => (
+              {forms.map((form, index) => {
+                // Cada ficha pode ter Categoria da máquina diferente das
+                // outras, então a visibilidade (ex.: Preparo da bebida) é
+                // recalculada por ficha, com o merge base + valores dela.
+                const formVisible = visibleFieldsFor(perFormFieldsAll, { ...baseForm, ...form.overrides });
+                return (
                 <div key={index} className="card" style={{ padding: 14 }}>
                   <strong>Ficha {pad(index + 1)}</strong>
                   <label className="form-field" style={{ marginTop: 8 }}>
@@ -178,14 +195,14 @@ export function NewOrderWizard({ onClose, onCreated }) {
                     />
                   </label>
 
-                  {perFormFields.length > 0 && !form.customized && (
+                  {formVisible.length > 0 && !form.customized && (
                     <button type="button" className="link-btn" style={{ marginTop: 8 }} onClick={() => updateForm(index, { customized: true })}>
                       Editar ficha individualmente
                     </button>
                   )}
-                  {perFormFields.length > 0 && form.customized && (
+                  {formVisible.length > 0 && form.customized && (
                     <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 10 }}>
-                      {perFormFields.map((field) => (
+                      {formVisible.map((field) => (
                         <label key={field.key} className="form-field">
                           <span className="form-field__label">{field.label}</span>
                           <DynamicFieldInput
@@ -198,7 +215,8 @@ export function NewOrderWizard({ onClose, onCreated }) {
                     </div>
                   )}
                 </div>
-              ))}
+                );
+              })}
             </div>
           )}
 

@@ -8,6 +8,7 @@ const FIELD_TYPES = [
   { value: "textarea", label: "Texto longo" },
   { value: "number", label: "Número" },
   { value: "date", label: "Data" },
+  { value: "time", label: "Horário" },
   { value: "email", label: "E-mail" },
   { value: "single_select", label: "Seleção única" },
   { value: "multi_select", label: "Seleção múltipla" },
@@ -15,7 +16,19 @@ const FIELD_TYPES = [
 ];
 
 function blankField() {
-  return { key: "", label: "", type: "text", required: true, perForm: false, options: [] };
+  return { key: "", label: "", type: "text", required: true, perForm: false, options: [], rulesText: "" };
+}
+
+// visibleIf/optionRules (addendum 02/09/2026) editados como JSON cru —
+// não é o mais amigável, mas cobre qualquer regra sem precisar de um
+// construtor visual de condições agora. Formato:
+// visibleIf: [{ "field": "outra_chave", "op": "eq"|"neq"|"in"|"notIn", "value": ... }]
+// optionRules: [{ "when": [...mesmo formato...], "removeOptions": ["Opção"] }]
+function stringifyRules(field) {
+  const rules = {};
+  if (field.visibleIf) rules.visibleIf = field.visibleIf;
+  if (field.optionRules) rules.optionRules = field.optionRules;
+  return Object.keys(rules).length > 0 ? JSON.stringify(rules, null, 2) : "";
 }
 
 function slugifyKey(label) {
@@ -42,13 +55,30 @@ export function PreparationTemplateSettingsPage() {
 
   useEffect(() => {
     if (activeVersion && draftFields === null) {
-      setDraftFields(activeVersion.schema.fields.map((f) => ({ ...f, options: f.options ?? [] })));
+      setDraftFields(activeVersion.schema.fields.map((f) => ({ ...f, options: f.options ?? [], rulesText: stringifyRules(f) })));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeVersion]);
 
   function updateField(index, patch) {
     setDraftFields((prev) => prev.map((f, i) => (i === index ? { ...f, ...patch } : f)));
+  }
+
+  // visibleIf/optionRules em JSON cru — parseia a cada tecla; se inválido,
+  // só guarda o texto (deixa o admin continuar digitando) sem tocar nas
+  // regras já aplicadas, nunca trava a edição do resto do campo.
+  function handleRulesChange(index, text) {
+    try {
+      const parsed = text.trim() ? JSON.parse(text) : {};
+      updateField(index, {
+        rulesText: text,
+        rulesError: null,
+        visibleIf: Array.isArray(parsed.visibleIf) ? parsed.visibleIf : undefined,
+        optionRules: Array.isArray(parsed.optionRules) ? parsed.optionRules : undefined,
+      });
+    } catch {
+      updateField(index, { rulesText: text, rulesError: "JSON inválido — regras anteriores mantidas até corrigir." });
+    }
   }
 
   function addField() {
@@ -74,7 +104,11 @@ export function PreparationTemplateSettingsPage() {
     setSaving(true);
     setSaveError(null);
     try {
-      await createPreparationTemplateVersion(draftFields);
+      // rulesText/rulesError são só estado de edição local (buffer do
+      // textarea de JSON) — o backend nem olha pra eles, mas não faz
+      // sentido mandar.
+      const payload = draftFields.map(({ rulesText: _rulesText, rulesError: _rulesError, ...field }) => field);
+      await createPreparationTemplateVersion(payload);
       setDraftFields(null);
       refetch();
     } catch (err) {
@@ -169,6 +203,23 @@ export function PreparationTemplateSettingsPage() {
                     />
                   </label>
                 )}
+
+                <label className="form-field" style={{ marginTop: 10 }}>
+                  <span className="form-field__label">Regras avançadas (JSON, opcional)</span>
+                  <textarea
+                    className="form-field__input"
+                    rows={3}
+                    placeholder='{"visibleIf":[{"field":"outra_chave","op":"eq","value":"..."}]}'
+                    value={field.rulesText ?? ""}
+                    onChange={(e) => handleRulesChange(index, e.target.value)}
+                    style={{ fontFamily: "monospace", fontSize: 12 }}
+                  />
+                  <span className="form-field__hint">
+                    Controla quando este campo aparece (visibleIf) ou remove opção conforme outro campo (optionRules) — ver
+                    fieldRules.ts pro formato exato.
+                  </span>
+                  {field.rulesError && <span className="form-field__error">{field.rulesError}</span>}
+                </label>
 
                 <div className="admin-users__actions" style={{ marginTop: 10 }}>
                   <button type="button" className="btn btn--ghost" onClick={() => moveField(index, -1)} disabled={index === 0}>
