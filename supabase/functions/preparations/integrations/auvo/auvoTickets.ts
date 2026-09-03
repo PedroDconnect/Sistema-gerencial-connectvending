@@ -48,16 +48,17 @@ function toBase64(bytes: Uint8Array): string {
   return btoa(binary);
 }
 
-// Shape de cada item de "attachments" — ajustado aos poucos pelo erro de
-// validação real da Auvo (a doc só dizia "Array of any"): "The attachment
-// name is required" confirmou que o campo se chama "name", não
-// "fileName" (02/09/2026). base64Content ainda não teve erro próprio —
-// se a Auvo reclamar de novo, é só ajustar aqui, nada mais no módulo
-// depende do formato exato.
+// Shape de cada item de "attachments" — ajustado aos poucos pelos erros
+// de validação reais da Auvo (a doc só dizia "Array of any"): "The
+// attachment name is required" confirmou "name"; "The field file is
+// required" confirmou "file" pro conteúdo (base64) (02/09/2026). Se a
+// Auvo reclamar de novo (ex.: exigir um prefixo tipo
+// "data:application/pdf;base64,..." em vez do base64 puro), é só ajustar
+// aqui, nada mais no módulo depende do formato exato.
 function toAttachmentPayload(attachment: TicketAttachment): Record<string, unknown> {
   return {
     name: attachment.fileName,
-    base64Content: toBase64(attachment.bytes),
+    file: toBase64(attachment.bytes),
   };
 }
 
