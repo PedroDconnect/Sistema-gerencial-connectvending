@@ -24,9 +24,14 @@ export function DynamicFieldInput({ field, value, onChange }) {
   }
 
   if (field.type === "single_select") {
+    // Campo em cascata (ex.: Modelo depende da Categoria) sem opção
+    // resolvida ainda — desabilita em vez de mostrar um <select> vazio,
+    // pedido explícito do formulário ("o campo só deve ser habilitado
+    // depois que a categoria for selecionada").
+    const noOptionsYet = field.optionsBy && (field.options ?? []).length === 0;
     return (
-      <select {...commonProps} value={value ?? ""} onChange={(e) => onChange(e.target.value)}>
-        <option value="">Selecione…</option>
+      <select {...commonProps} value={value ?? ""} onChange={(e) => onChange(e.target.value)} disabled={noOptionsYet}>
+        <option value="">{noOptionsYet ? "Escolha a categoria primeiro…" : "Selecione…"}</option>
         {(field.options ?? []).map((opt) => (
           <option key={opt} value={opt}>
             {opt}
@@ -43,6 +48,7 @@ export function DynamicFieldInput({ field, value, onChange }) {
     }
     return (
       <div className="admin-users__module-grid" style={{ maxHeight: 160 }}>
+        {(field.options ?? []).length === 0 && <span className="form-field__hint">Nenhuma opção disponível.</span>}
         {(field.options ?? []).map((opt) => (
           <label key={opt} className="admin-users__module-item">
             <input type="checkbox" checked={selected.includes(opt)} onChange={() => toggle(opt)} />

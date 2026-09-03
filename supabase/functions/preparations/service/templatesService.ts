@@ -16,7 +16,7 @@ const TEMPLATE_NAME = "Ficha de preparação Connect Vending";
 // "time" adicionado no addendum de 02/09/2026 — convite de agenda
 // (seção 7) usa horário opcional junto da Previsão de instalação.
 const ALLOWED_FIELD_TYPES = new Set(["text", "textarea", "number", "date", "time", "email", "single_select", "multi_select", "boolean"]);
-const CONDITION_OPS = new Set(["eq", "neq", "in", "notIn"]);
+const CONDITION_OPS = new Set(["eq", "neq", "in", "notIn", "contains"]);
 
 function toTemplateRow(row: Record<string, unknown>): TemplateRow {
   return {
@@ -93,6 +93,20 @@ function sanitizeOptionRules(raw: unknown): { when: { field: string; op: string;
   return out.length > 0 ? out : undefined;
 }
 
+// Modelo em cascata por Categoria (formulário definitivo, 02/09/2026):
+// opções trocam inteiro conforme outro campo, não é uma lista fixa —
+// esse campo legitimamente não tem "options" próprio (ver checagem
+// abaixo, que aceita optionsBy como alternativa a options).
+function sanitizeOptionsBy(raw: unknown): { field: string; map: Record<string, string[]> } | undefined {
+  const obj = raw as Record<string, unknown> | undefined;
+  if (!obj || typeof obj.field !== "string" || typeof obj.map !== "object" || obj.map === null) return undefined;
+  const map: Record<string, string[]> = {};
+  for (const [key, value] of Object.entries(obj.map as Record<string, unknown>)) {
+    if (Array.isArray(value)) map[key] = value.filter((o): o is string => typeof o === "string");
+  }
+  return Object.keys(map).length > 0 ? { field: obj.field, map } : undefined;
+}
+
 function validateFields(fields: unknown): TemplateField[] {
   if (!Array.isArray(fields) || fields.length === 0) {
     throw new ControlledError("O template precisa de pelo menos 1 campo.", 400);
@@ -108,8 +122,9 @@ function validateFields(fields: unknown): TemplateField[] {
     seenKeys.add(key);
     if (!ALLOWED_FIELD_TYPES.has(type)) throw new ControlledError(`Tipo de campo inválido em "${key}": ${type}.`, 400);
     const options = Array.isArray(field.options) ? field.options.filter((o): o is string => typeof o === "string") : undefined;
-    if ((type === "single_select" || type === "multi_select") && (!options || options.length === 0)) {
-      throw new ControlledError(`Campo "${key}" (${type}) precisa de pelo menos 1 opção.`, 400);
+    const optionsBy = sanitizeOptionsBy(field.optionsBy);
+    if ((type === "single_select" || type === "multi_select") && !optionsBy && (!options || options.length === 0)) {
+      throw new ControlledError(`Campo "${key}" (${type}) precisa de pelo menos 1 opção (ou optionsBy).`, 400);
     }
     const visibleIf = sanitizeConditions(field.visibleIf);
     const optionRules = sanitizeOptionRules(field.optionRules);
@@ -120,6 +135,7 @@ function validateFields(fields: unknown): TemplateField[] {
       required: Boolean(field.required),
       perForm: Boolean(field.perForm),
       ...(options ? { options } : {}),
+      ...(optionsBy ? { optionsBy } : {}),
       ...(visibleIf ? { visibleIf } : {}),
       ...(optionRules ? { optionRules } : {}),
     } as TemplateField;

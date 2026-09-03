@@ -1,10 +1,10 @@
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import { Icon } from "../Icon";
 import { DynamicFieldInput } from "./DynamicFieldInput";
 import { CustomerSearchField } from "./CustomerSearchField";
 import { useActivePreparationTemplate } from "../../hooks/useActivePreparationTemplate";
 import { createPreparationOrder } from "../../lib/preparationsApi";
-import { visibleFieldsFor } from "../../lib/preparationFieldRules";
+import { visibleFieldsFor, sanitizeValues, removedOptions } from "../../lib/preparationFieldRules";
 
 const STEPS = ["customer", "quantity", "base", "forms", "review"];
 const STEP_LABELS = {
@@ -17,6 +17,77 @@ const STEP_LABELS = {
 
 function pad(n) {
   return String(n).padStart(2, "0");
+}
+
+// "Se a categoria escolhida tiver sistema de preparo = não, mostrar um
+// aviso..." — derivado do próprio schema (não hardcoda Gabinete/Máquina
+// de Gelo aqui): acha qualquer campo da seção "Preparo da bebida"
+// condicionado a machine_category via "notIn" e reaproveita essa mesma
+// lista, em vez de duplicar o critério em dois lugares.
+function noPrepSystemCategories(fieldsAll) {
+  const condField = fieldsAll.find((f) => (f.visibleIf ?? []).some((c) => c.field === "machine_category" && c.op === "notIn"));
+  const condition = condField?.visibleIf?.find((c) => c.field === "machine_category" && c.op === "notIn");
+  return Array.isArray(condition?.value) ? condition.value : [];
+}
+
+function formatSummaryValue(value) {
+  if (value === undefined || value === null || value === "") return "—";
+  if (Array.isArray(value)) return value.length > 0 ? value.join(", ") : "—";
+  return String(value);
+}
+
+// Ordem exata pedida no formulário definitivo pro "resumo ao vivo":
+// Contrato, Cliente, Local interno, Modelo de negócio, Dias de
+// abastecimento (só se visível), Categoria, Modelo, Acessórios, e — só
+// se a seção "Preparo da bebida" estiver visível — Tipo de copo, Marca,
+// Tipo do café, Produto e (se Locação + Dose) Valor da dose; por fim
+// Observações. Usa os rótulos do próprio template (não hardcoded), pra
+// acompanhar se o admin renomear um campo.
+const SUMMARY_KEY_ORDER = [
+  "contract_number",
+  "customer_name",
+  "business_model",
+  "supply_days",
+  "machine_category",
+  "machine_model",
+  "accessories",
+  "cup_type",
+  "product_brand",
+  "coffee_type",
+  "standard_layouts",
+  "dose_value",
+  "observations",
+];
+
+// "Local interno" tem coluna própria (form.internalLocation), não é uma
+// chave de form_data — por isso entra à parte, logo depois de Cliente.
+function buildFormSummary(form, fieldsAll, baseForm) {
+  const merged = { ...baseForm, ...form.overrides };
+  const visible = visibleFieldsFor(fieldsAll, merged);
+  const visibleKeys = new Set(visible.map((f) => f.key));
+  const fieldByKey = Object.fromEntries(fieldsAll.map((f) => [f.key, f]));
+
+  const rows = [];
+  for (const key of SUMMARY_KEY_ORDER) {
+    if (key === "customer_name") {
+      rows.push({ label: fieldByKey[key]?.label ?? "Cliente", value: formatSummaryValue(merged[key]) });
+      rows.push({ label: "Local interno", value: formatSummaryValue(form.internalLocation) });
+      continue;
+    }
+    if (!fieldByKey[key] || !visibleKeys.has(key)) continue;
+    rows.push({ label: fieldByKey[key].label, value: formatSummaryValue(merged[key]) });
+  }
+  return rows;
+}
+
+async function copySummary(rows) {
+  const text = rows.map((r) => `${r.label}: ${r.value}`).join("\n");
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 // Fluxo exato da spec (seção 4): cliente → quantidade → dados-base
@@ -33,6 +104,7 @@ export function NewOrderWizard({ onClose, onCreated }) {
   const [forms, setForms] = useState([]); // [{ internalLocation, overrides, customized }]
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState(null);
+  const [copiedIndex, setCopiedIndex] = useState(null);
 
   const step = STEPS[stepIndex];
   const fields = template?.schema?.fields ?? [];
@@ -65,8 +137,36 @@ export function NewOrderWizard({ onClose, onCreated }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sharedDefaults]);
 
+  // "Se um item já estava marcado antes de uma mudança que o torna
+  // inválido, desmarcar automaticamente" — só relevante quando o patch
+  // mexe em overrides (ex.: trocou a Categoria da máquina), nunca em
+  // internalLocation/customized.
+  function sanitizeOverrides(overrides) {
+    const merged = sanitizeValues(perFormFieldsAll, { ...baseForm, ...overrides });
+    const next = {};
+    for (const f of perFormFieldsAll) if (f.key in merged) next[f.key] = merged[f.key];
+    return next;
+  }
+
   function updateForm(index, patch) {
-    setForms((prev) => prev.map((f, i) => (i === index ? { ...f, ...patch } : f)));
+    setForms((prev) =>
+      prev.map((f, i) => {
+        if (i !== index) return f;
+        const merged = { ...f, ...patch };
+        if (patch.overrides) merged.overrides = sanitizeOverrides(patch.overrides);
+        return merged;
+      })
+    );
+  }
+
+  function updateSharedDefault(key, value) {
+    setSharedDefaults((prev) => {
+      const next = { ...prev, [key]: value };
+      const merged = sanitizeValues(perFormFieldsAll, { ...baseForm, ...next });
+      const sanitized = {};
+      for (const f of perFormFieldsAll) if (f.key in merged) sanitized[f.key] = merged[f.key];
+      return sanitized;
+    });
   }
 
   function goNext() {
@@ -166,12 +266,22 @@ export function NewOrderWizard({ onClose, onCreated }) {
                   sharedVisible.length > 0 && (
                     <div>
                       <p className="form-field__hint">Valor padrão pros campos abaixo (pode ser ajustado por ficha):</p>
-                      {sharedVisible.map((field) => (
-                        <label key={field.key} className="form-field" style={{ marginTop: 8 }}>
-                          <span className="form-field__label">{field.label}</span>
-                          <DynamicFieldInput field={field} value={sharedDefaults[field.key]} onChange={(v) => setSharedDefaults((prev) => ({ ...prev, [field.key]: v }))} />
-                        </label>
-                      ))}
+                      {sharedVisible.map((field) => {
+                        const hidden = removedOptions(field, { ...baseForm, ...sharedDefaults });
+                        const noPrep = field.key === "machine_category" && noPrepSystemCategories(perFormFieldsAll).includes(sharedDefaults[field.key]);
+                        return (
+                          <label key={field.key} className="form-field" style={{ marginTop: 8 }}>
+                            <span className="form-field__label">{field.label}</span>
+                            <DynamicFieldInput field={field} value={sharedDefaults[field.key]} onChange={(v) => updateSharedDefault(field.key, v)} />
+                            {hidden.length > 0 && (
+                              <span className="form-field__hint">Ocultado agora: {hidden.join(", ")} (conforme categoria/modelo de negócio).</span>
+                            )}
+                            {noPrep && (
+                              <span className="form-field__hint">Essa categoria não tem sistema de preparo — a seção "Preparo da bebida" fica oculta.</span>
+                            )}
+                          </label>
+                        );
+                      })}
                     </div>
                   )
                 );
@@ -202,16 +312,26 @@ export function NewOrderWizard({ onClose, onCreated }) {
                   )}
                   {formVisible.length > 0 && form.customized && (
                     <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 10 }}>
-                      {formVisible.map((field) => (
-                        <label key={field.key} className="form-field">
-                          <span className="form-field__label">{field.label}</span>
-                          <DynamicFieldInput
-                            field={field}
-                            value={form.overrides[field.key]}
-                            onChange={(v) => updateForm(index, { overrides: { ...form.overrides, [field.key]: v } })}
-                          />
-                        </label>
-                      ))}
+                      {formVisible.map((field) => {
+                        const hidden = removedOptions(field, { ...baseForm, ...form.overrides });
+                        const noPrep = field.key === "machine_category" && noPrepSystemCategories(perFormFieldsAll).includes(form.overrides[field.key]);
+                        return (
+                          <label key={field.key} className="form-field">
+                            <span className="form-field__label">{field.label}</span>
+                            <DynamicFieldInput
+                              field={field}
+                              value={form.overrides[field.key]}
+                              onChange={(v) => updateForm(index, { overrides: { ...form.overrides, [field.key]: v } })}
+                            />
+                            {hidden.length > 0 && (
+                              <span className="form-field__hint">Ocultado agora: {hidden.join(", ")} (conforme categoria/modelo de negócio).</span>
+                            )}
+                            {noPrep && (
+                              <span className="form-field__hint">Essa categoria não tem sistema de preparo — a seção "Preparo da bebida" fica oculta.</span>
+                            )}
+                          </label>
+                        );
+                      })}
                     </div>
                   )}
                 </div>
@@ -221,17 +341,39 @@ export function NewOrderWizard({ onClose, onCreated }) {
           )}
 
           {template && step === "review" && (
-            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
               <p>
                 <strong>{customer?.name}</strong> — {quantity} ficha(s)
               </p>
-              <ul className="metric-modal__customer-list">
-                {forms.map((form, index) => (
-                  <li key={index} className="metric-modal__customer" style={{ padding: "8px 10px" }}>
-                    Ficha {pad(index + 1)} — {form.internalLocation}
-                  </li>
-                ))}
-              </ul>
+              {forms.map((form, index) => {
+                const rows = buildFormSummary(form, fields, baseForm);
+                return (
+                  <div key={index} className="card" style={{ padding: 14 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                      <strong>Ficha {pad(index + 1)}</strong>
+                      <button
+                        type="button"
+                        className="link-btn"
+                        onClick={async () => {
+                          const ok = await copySummary(rows);
+                          setCopiedIndex(ok ? index : null);
+                          if (ok) setTimeout(() => setCopiedIndex((i) => (i === index ? null : i)), 2000);
+                        }}
+                      >
+                        {copiedIndex === index ? "Copiado!" : "Copiar resumo"}
+                      </button>
+                    </div>
+                    <dl style={{ marginTop: 8, display: "grid", gridTemplateColumns: "auto 1fr", gap: "4px 12px", fontSize: 13 }}>
+                      {rows.map((row) => (
+                        <Fragment key={row.label}>
+                          <dt style={{ color: "var(--text-muted)" }}>{row.label}</dt>
+                          <dd>{row.value}</dd>
+                        </Fragment>
+                      ))}
+                    </dl>
+                  </div>
+                );
+              })}
               {submitError && <span className="form-field__error">{submitError.message}</span>}
             </div>
           )}

@@ -7,7 +7,7 @@ import { isFieldVisible } from "./fieldRules.ts";
 
 export interface FieldCondition {
   field: string;
-  op: "eq" | "neq" | "in" | "notIn";
+  op: "eq" | "neq" | "in" | "notIn" | "contains";
   value: unknown;
 }
 
@@ -18,13 +18,15 @@ export interface TemplateField {
   required?: boolean;
   perForm?: boolean;
   options?: string[];
-  // Addendum 02/09/2026 (ver fieldRules.ts): visibilidade condicional
-  // (ex.: campos de "Preparo da bebida" só pra categoria com sistema de
-  // preparo) e filtragem de opção (ex.: Acessórios por categoria/modelo
-  // de negócio). Ambos opcionais — campo sem essas chaves se comporta
-  // como sempre se comportou (sempre visível, opções fixas).
+  // Formulário definitivo, 02/09/2026 (ver fieldRules.ts): visibilidade
+  // condicional (ex.: "Preparo da bebida" só pra categoria com sistema de
+  // preparo), filtragem de opção (ex.: Acessórios por categoria/modelo
+  // de negócio) e opções em cascata (ex.: Modelo depende inteiramente da
+  // Categoria). Todos opcionais — campo sem essas chaves se comporta como
+  // sempre se comportou (sempre visível, opções fixas).
   visibleIf?: FieldCondition[];
   optionRules?: { when: FieldCondition[]; removeOptions: string[] }[];
+  optionsBy?: { field: string; map: Record<string, string[]> };
 }
 
 export interface TemplateSchema {
