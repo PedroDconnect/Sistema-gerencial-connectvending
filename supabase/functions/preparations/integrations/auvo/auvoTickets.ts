@@ -48,15 +48,15 @@ function toBase64(bytes: Uint8Array): string {
   return btoa(binary);
 }
 
-// O shape de CADA item de "attachments" continua sendo o único pedaço
-// realmente não confirmado (a doc só diz "Array of any", sem detalhar as
-// propriedades) — fileName/base64Content é a convenção mais comum pra
-// embutir arquivo em corpo JSON (sem multipart), mas se a Auvo esperar
-// nomes de campo diferentes, é só ajustar aqui dentro, nada mais no
-// módulo depende do formato exato.
+// Shape de cada item de "attachments" — ajustado aos poucos pelo erro de
+// validação real da Auvo (a doc só dizia "Array of any"): "The attachment
+// name is required" confirmou que o campo se chama "name", não
+// "fileName" (02/09/2026). base64Content ainda não teve erro próprio —
+// se a Auvo reclamar de novo, é só ajustar aqui, nada mais no módulo
+// depende do formato exato.
 function toAttachmentPayload(attachment: TicketAttachment): Record<string, unknown> {
   return {
-    fileName: attachment.fileName,
+    name: attachment.fileName,
     base64Content: toBase64(attachment.bytes),
   };
 }
