@@ -3,6 +3,7 @@ import { Icon } from "../Icon";
 import { MachineStatusCards } from "./MachineStatusCards";
 import { MachineMonitorTable } from "./MachineMonitorTable";
 import { MachineDetailDrawer } from "./MachineDetailDrawer";
+import { NoDoseTicketsModal } from "./NoDoseTicketsModal";
 import { useVmpayMachineMonitor } from "../../hooks/useVmpayMachineMonitor";
 import { formatDateTime, windowHours, filterMachines, machinesToCsv, downloadCsv } from "../../services/vmpayService";
 
@@ -11,12 +12,19 @@ export function TelemetriaPage() {
   const [selectedMachine, setSelectedMachine] = useState(null);
   const [search, setSearch] = useState("");
   const [statusFilters, setStatusFilters] = useState([]);
+  const [showAnalysis, setShowAnalysis] = useState(false);
   const hours = windowHours(data?.window);
 
   const filteredMachines = useMemo(
     () => filterMachines(data?.machines ?? [], { search, statusFilters }),
     [data, search, statusFilters]
   );
+
+  // Independente do filtro em tela — "rodar análise" opera sempre sobre
+  // TODAS as máquinas sem doses, não só as que estão visíveis no momento
+  // (pedido do usuário: agir sobre "sem doses" como conceito, não sobre a
+  // lista filtrada da tela).
+  const noDoseMachines = useMemo(() => (data?.machines ?? []).filter((m) => m.status === "no_doses"), [data]);
 
   function handleExport() {
     if (filteredMachines.length === 0) return;
@@ -44,6 +52,15 @@ export function TelemetriaPage() {
           <button type="button" className="btn btn--ghost" onClick={handleExport} disabled={filteredMachines.length === 0}>
             <Icon name="download" size={16} />
             Exportar
+          </button>
+          <button
+            type="button"
+            className="btn btn--primary"
+            onClick={() => setShowAnalysis(true)}
+            disabled={noDoseMachines.length === 0}
+          >
+            <Icon name="clipboard" size={16} />
+            Rodar análise
           </button>
         </div>
       </header>
@@ -87,6 +104,8 @@ export function TelemetriaPage() {
       />
 
       <MachineDetailDrawer machine={selectedMachine} windowHours={hours} onClose={() => setSelectedMachine(null)} />
+
+      {showAnalysis && <NoDoseTicketsModal machines={noDoseMachines} onClose={() => setShowAnalysis(false)} />}
     </main>
   );
 }

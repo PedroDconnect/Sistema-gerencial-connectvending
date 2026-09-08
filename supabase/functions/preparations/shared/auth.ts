@@ -38,6 +38,13 @@ function hasModuleAccess(appMetadata: Record<string, unknown> | undefined | null
   return modules.includes(MODULE_ID);
 }
 
+function hasAnyModuleAccess(appMetadata: Record<string, unknown> | undefined | null, isAdmin: boolean, moduleIds: string[]): boolean {
+  if (isAdmin) return true;
+  const modules = appMetadata?.modules;
+  if (!Array.isArray(modules)) return true; // grandfathered — mesmo raciocínio de isAdmin acima
+  return moduleIds.some((id) => modules.includes(id));
+}
+
 async function resolveCaller(
   db: SupabaseClient,
   req: Request
@@ -64,6 +71,17 @@ async function resolveCaller(
 export async function requireModuleAccess(db: SupabaseClient, req: Request): Promise<CallerInfo> {
   const { caller, appMetadata } = await resolveCaller(db, req);
   if (!hasModuleAccess(appMetadata, caller.isAdmin)) {
+    throw new ControlledError("Você não tem acesso a este módulo.", 403);
+  }
+  return caller;
+}
+
+// Ação disparada de fora do módulo "preparacoes" (ex.: "Rodar análise" na
+// tela de Telemetria, que é gated pelo módulo "telemetria") — libera pra
+// quem tem QUALQUER um dos módulos passados, não só "preparacoes".
+export async function requireAnyModuleAccess(db: SupabaseClient, req: Request, moduleIds: string[]): Promise<CallerInfo> {
+  const { caller, appMetadata } = await resolveCaller(db, req);
+  if (!hasAnyModuleAccess(appMetadata, caller.isAdmin, moduleIds)) {
     throw new ControlledError("Você não tem acesso a este módulo.", 403);
   }
   return caller;

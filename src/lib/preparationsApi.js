@@ -91,3 +91,9 @@ export function fetchTicketRequestTypes() {
 export function createTechnicalVisit(input) {
   return request("/technical-visits", { method: "POST", body: JSON.stringify(input) });
 }
+
+// "Rodar análise" em Telemetria — abre 1 chamado Auvo por máquina sem
+// doses selecionada (em massa ou por seleção manual).
+export function createNoDoseTickets(input) {
+  return request("/no-dose-tickets", { method: "POST", body: JSON.stringify(input) });
+}

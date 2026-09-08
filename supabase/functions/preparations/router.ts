@@ -1,11 +1,12 @@
 import { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { corsHeaders, errorResponse, ControlledError } from "./shared/http.ts";
-import { requireModuleAccess, requireAdmin } from "./shared/auth.ts";
+import { requireModuleAccess, requireAdmin, requireAnyModuleAccess } from "./shared/auth.ts";
 import { handleListOrders, handleGetOrder, handleCreateOrder, handleRetryForm, handleRegenerateDocument, handleSyncOrder } from "./handlers/orders.ts";
 import { handleSearchCustomers, handleCreateCustomer } from "./handlers/customers.ts";
 import { handleGetActiveTemplate, handleListTemplateVersions, handleCreateTemplateVersion } from "./handlers/templates.ts";
 import { handleGetFormDocument } from "./handlers/documents.ts";
 import { handleListRequestTypes, handleCreateTechnicalVisit } from "./handlers/technicalVisits.ts";
+import { handleCreateNoDoseTickets } from "./handlers/noDoseTickets.ts";
 
 // Mesmo padrão de dispatch manual de admin/router.ts e operation/router.ts:
 // Supabase casa só o primeiro segmento ("preparations") com esta function,
@@ -28,6 +29,15 @@ export async function route(req: Request, db: SupabaseClient): Promise<Response>
       if (req.method === "GET") return await handleListTemplateVersions(db);
       if (req.method === "POST") return await handleCreateTemplateVersion(db, caller, req);
       throw new ControlledError("Método não suportado.", 405);
+    }
+
+    // "Rodar análise" na tela de Telemetria (08/09/2026) — disparada de um
+    // módulo diferente ("telemetria"), checagem própria antes do gate
+    // genérico de "preparacoes" logo abaixo.
+    if (subPath[0] === "no-dose-tickets" && !subPath[1]) {
+      if (req.method !== "POST") throw new ControlledError("Método não suportado.", 405);
+      const caller = await requireAnyModuleAccess(db, req, ["preparacoes", "telemetria"]);
+      return await handleCreateNoDoseTickets(db, caller, req);
     }
 
     // Todo o resto exige só o módulo "preparacoes" liberado (ou admin,

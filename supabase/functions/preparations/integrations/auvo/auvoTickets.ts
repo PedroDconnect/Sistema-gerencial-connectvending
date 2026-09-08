@@ -19,7 +19,13 @@ export interface TicketAttachment {
 export interface CreateTicketInput {
   title: string;
   description: string;
-  customerId: number;
+  // Opcional desde a análise de "Máquinas sem doses" (Telemetria,
+  // 08/09/2026): nem toda máquina tem cliente Auvo identificado pelo
+  // cruzamento de patrimônio — pedido explícito do usuário pra abrir o
+  // ticket mesmo assim ("pode ser sem cliente vinculado"), então
+  // customerId passa a ser omitido do corpo quando ausente, em vez de
+  // travar a criação do chamado.
+  customerId?: number;
   requestTypeId: number;
   statusId?: number; // omitido: Auvo usa o status padrão do tipo de solicitação escolhido
   requesterName: string;
@@ -76,7 +82,7 @@ export async function createTicket(db: SupabaseClient, creds: AuvoCredentials, i
       ...(input.statusId !== undefined ? { statusId: input.statusId } : {}),
       requesterName: input.requesterName,
       requesterEmail: input.requesterEmail,
-      customerId: input.customerId,
+      ...(input.customerId !== undefined ? { customerId: input.customerId } : {}),
       priority: DEFAULT_PRIORITY,
       ...(input.externalId ? { externalId: input.externalId } : {}),
       ...(input.attachment ? { attachments: [toAttachmentPayload(input.attachment)] } : {}),
