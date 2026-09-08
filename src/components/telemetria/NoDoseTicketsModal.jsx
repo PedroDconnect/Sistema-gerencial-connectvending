@@ -8,7 +8,7 @@ import { formatDateTime } from "../../services/vmpayService";
 // manual (desmarca o que não quer). "Pode ser sem cliente vinculado" —
 // o backend cruza patrimônio × Auvo por conta própria e abre o chamado
 // mesmo sem achar cliente, então aqui não há campo de cliente nenhum.
-export function NoDoseTicketsModal({ machines, onClose }) {
+export function NoDoseTicketsModal({ machines, onClose, onDone }) {
   const [selected, setSelected] = useState(() => new Set(machines.map((m) => m.machineId)));
   const [requestTypes, setRequestTypes] = useState([]);
   const [loadingTypes, setLoadingTypes] = useState(true);
@@ -68,6 +68,10 @@ export function NoDoseTicketsModal({ machines, onClose }) {
       };
       const response = await createNoDoseTickets(payload);
       setResults(response?.items ?? []);
+      // Os flags gravados pelo backend só aparecem na próxima leitura do
+      // snapshot (cache de 5min) — força um refresh imediato pra tabela já
+      // mostrar as máquinas selecionadas como "Chamado aberto" sem esperar.
+      onDone?.();
     } catch (err) {
       setSubmitError(err);
     } finally {

@@ -3,6 +3,10 @@
 export const MACHINE_STATUS_META = {
   operating: { label: "Operando", emoji: "🟢", variant: "success" },
   no_doses: { label: "Sem doses", emoji: "🟡", variant: "warning" },
+  // "Rodar análise" (08/09/2026) já abriu chamado Auvo pra essa máquina —
+  // sai do grupo "Sem doses" pra não ficar misturada com quem ainda não
+  // tem nenhum chamado aberto.
+  no_doses_ticket_open: { label: "Chamado aberto", emoji: "🎫", variant: "info" },
   no_installation: { label: "Sem instalação", emoji: "⚪", variant: "neutral" },
   data_unavailable: { label: "Dados indisponíveis", emoji: "⚠️", variant: "neutral" },
 };
@@ -23,6 +27,7 @@ export const SUMMARY_CARDS = [
   { key: "totalMachines", label: "Total de Máquinas" },
   { key: "machinesWithVends", label: "Com Doses" },
   { key: "withoutVends", label: "Sem Doses", tone: "danger" },
+  { key: "ticketsOpen", label: "Chamado Aberto" },
 ];
 
 // A API devolve tudo em UTC (occurred_at, generatedAt, e last_communication
@@ -118,6 +123,7 @@ const EXPORT_COLUMNS = [
   ["carrier", "Operadora"],
   ["operationStatus", "Status Operacional (VMpay)"],
   ["machineModelId", "Modelo"],
+  ["ticketId", "Chamado Auvo"],
 ];
 
 function toExportRow(machine) {
@@ -135,6 +141,7 @@ function toExportRow(machine) {
     carrier: formatCarrier(machine.connection),
     operationStatus: machine.operationStatus ?? "",
     machineModelId: machine.machineModelId ?? "",
+    ticketId: machine.ticketId ?? "",
   };
 }
 

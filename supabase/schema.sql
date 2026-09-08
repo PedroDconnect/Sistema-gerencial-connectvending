@@ -732,3 +732,29 @@ alter table preparation_logs enable row level security;
 insert into storage.buckets (id, name, public)
 values ('preparation-documents', 'preparation-documents', false)
 on conflict (id) do nothing;
+
+-- ---------- Telemetria — chamados Auvo abertos p/ máquinas sem doses ----------
+-- "Rodar análise" (08/09/2026): quando um chamado é aberto pra uma máquina
+-- "sem doses", grava aqui (function "preparations", que já tem o cliente
+-- de escrita Auvo) — a function "vmpay" lê esta tabela ao montar o
+-- snapshot de Telemetria e faz a máquina "mover de coluna" (status
+-- "no_doses_ticket_open" em vez de "no_doses"), pra não misturar quem já
+-- tem chamado aberto com quem ainda não tem nenhum. resolved_at é
+-- preenchido automaticamente pelo próprio "vmpay" quando a máquina volta a
+-- gerar dose (não precisa de cron nem de retorno da Auvo pra isso).
+create table if not exists machine_no_dose_tickets (
+  id bigint generated always as identity primary key,
+  machine_id bigint not null,
+  asset_number text,
+  auvo_ticket_id bigint not null,
+  auvo_customer_id bigint,
+  opened_by uuid,
+  opened_by_name text,
+  opened_at timestamptz not null default now(),
+  resolved_at timestamptz,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists machine_no_dose_tickets_open_idx on machine_no_dose_tickets (machine_id) where resolved_at is null;
+
+alter table machine_no_dose_tickets enable row level security;

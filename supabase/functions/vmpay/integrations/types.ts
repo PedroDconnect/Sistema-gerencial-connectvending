@@ -46,6 +46,11 @@ export interface VendWindowEntry {
 export type MachineMonitorStatus =
   | "operating"
   | "no_doses"
+  // "Rodar análise" (Telemetria, 08/09/2026) já abriu chamado Auvo pra essa
+  // máquina e ele ainda está aberto — sai do grupo "no_doses" pra não
+  // aparecer misturada com quem ainda não teve chamado nenhum aberto
+  // (pedido explícito do usuário: "mover pra coluna correta").
+  | "no_doses_ticket_open"
   | "no_installation"
   | "data_unavailable";
 
@@ -66,4 +71,7 @@ export interface MonitoredMachine {
   vendCountLast2Hours: number;
   quantityLast2Hours: number;
   status: MachineMonitorStatus;
+  // Preenchidos só quando status === "no_doses_ticket_open".
+  ticketId: number | null;
+  ticketOpenedAt: string | null;
 }

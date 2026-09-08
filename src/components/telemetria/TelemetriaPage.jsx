@@ -105,7 +105,9 @@ export function TelemetriaPage() {
 
       <MachineDetailDrawer machine={selectedMachine} windowHours={hours} onClose={() => setSelectedMachine(null)} />
 
-      {showAnalysis && <NoDoseTicketsModal machines={noDoseMachines} onClose={() => setShowAnalysis(false)} />}
+      {showAnalysis && (
+        <NoDoseTicketsModal machines={noDoseMachines} onClose={() => setShowAnalysis(false)} onDone={() => refetch(true)} />
+      )}
     </main>
   );
 }

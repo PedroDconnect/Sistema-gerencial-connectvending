@@ -119,6 +119,48 @@ async function fetchVendsWindow(
   return { vends, pages: pagesFetched.filter(Boolean).length };
 }
 
+interface OpenTicketFlag {
+  ticketId: number;
+  openedAt: string;
+}
+
+// "Rodar análise" (Telemetria, 08/09/2026) grava aqui quando abre um
+// chamado Auvo pra uma máquina sem doses (ver preparations/service/
+// noDoseTicketsService.ts, mesmo Postgres — function diferente). Falha
+// aqui nunca derruba o snapshot inteiro: sem o flag, a máquina só continua
+// aparecendo como "no_doses" normal, que é o comportamento de antes desta
+// feature existir.
+async function fetchOpenTicketFlags(db: SupabaseClient): Promise<Map<number, OpenTicketFlag>> {
+  const map = new Map<number, OpenTicketFlag>();
+  const { data, error } = await db
+    .from("machine_no_dose_tickets")
+    .select("machine_id, auvo_ticket_id, opened_at")
+    .is("resolved_at", null);
+  if (error) {
+    await logEvent(db, "vmpay", "VMPAY_TICKET_FLAGS_READ_ERROR", { message: error.message });
+    return map;
+  }
+  for (const row of (data ?? []) as { machine_id: number; auvo_ticket_id: number; opened_at: string }[]) {
+    map.set(row.machine_id, { ticketId: row.auvo_ticket_id, openedAt: row.opened_at });
+  }
+  return map;
+}
+
+// Máquina com chamado aberto voltou a gerar dose — encerra o flag (não
+// precisa mais aparecer separado, o próprio status "operating" já cobre).
+// Best-effort: nunca lançado pro chamador (o snapshot já foi calculado e
+// devolvido corretamente mesmo se isso falhar; só sobra um flag "aberto"
+// obsoleto até a próxima tentativa).
+async function resolveTicketFlags(db: SupabaseClient, machineIds: number[]): Promise<void> {
+  if (machineIds.length === 0) return;
+  const { error } = await db
+    .from("machine_no_dose_tickets")
+    .update({ resolved_at: new Date().toISOString() })
+    .in("machine_id", machineIds)
+    .is("resolved_at", null);
+  if (error) await logEvent(db, "vmpay", "VMPAY_TICKET_FLAGS_RESOLVE_ERROR", { message: error.message });
+}
+
 // Seção 7 do pedido: índice simples, não guarda a venda inteira. Set/Map,
 // uma passada, sem loop aninhado (seção 26).
 function buildVendIndex(vends: ReturnType<typeof normalizeVend>[]): Map<number, VendWindowEntry> {
@@ -142,6 +184,7 @@ export interface MachineMonitorSummary {
   withoutVends: number;
   noInstallation: number;
   dataUnavailable: number;
+  ticketsOpen: number;
 }
 
 export interface MachineMonitorSnapshot {
@@ -168,11 +211,17 @@ async function computeSnapshot(db: SupabaseClient): Promise<MachineMonitorSnapsh
   // /machines terminar pra só então começar o resto é a maior otimização
   // de tempo disponível aqui (evita pagar a latência de /machines duas
   // vezes, uma sozinha e outra dentro do Promise.allSettled).
-  const [machinesResult, installationsResult, vendsResult, locationsResult] = await Promise.allSettled([
-    fetchAllMachines(creds, db),
-    fetchAllInstallations(creds),
-    fetchVendsWindow(creds, windowFromIso, windowToIso, db),
-    fetchAllLocations(creds, db),
+  // fetchOpenTicketFlags nunca rejeita (ela mesma trata a própria falha) —
+  // por isso fica fora do Promise.allSettled das 4 buscas que podem
+  // rejeitar de verdade, mas ainda disparada em paralelo com elas.
+  const [[machinesResult, installationsResult, vendsResult, locationsResult], openTicketFlags] = await Promise.all([
+    Promise.allSettled([
+      fetchAllMachines(creds, db),
+      fetchAllInstallations(creds),
+      fetchVendsWindow(creds, windowFromIso, windowToIso, db),
+      fetchAllLocations(creds, db),
+    ]),
+    fetchOpenTicketFlags(db),
   ]);
 
   // /machines é tratado como obrigatório: se falhar e não houver cache
@@ -230,15 +279,27 @@ async function computeSnapshot(db: SupabaseClient): Promise<MachineMonitorSnapsh
     withoutVends: 0,
     noInstallation: 0,
     dataUnavailable: 0,
+    ticketsOpen: 0,
   };
+
+  // Máquina que volta a gerar dose enquanto tinha um chamado "sem doses"
+  // aberto não precisa mais do flag (ver resolveTicketFlags acima).
+  const machineIdsToResolve: number[] = [];
 
   const monitored: MonitoredMachine[] = machines.map((machine) => {
     const installation = installationByMachine.get(machine.id) ?? null;
     const vend = vendIndex.get(machine.id) ?? null;
-    const status = classifyMachineStatus(installation, vend, {
+    let status = classifyMachineStatus(installation, vend, {
       vendsUnavailable,
       installationsUnavailable,
     });
+
+    const flag = openTicketFlags.get(machine.id) ?? null;
+    if (flag && status === "operating") {
+      machineIdsToResolve.push(machine.id);
+    } else if (flag && status === "no_doses") {
+      status = "no_doses_ticket_open";
+    }
 
     switch (status) {
       case "operating":
@@ -246,6 +307,9 @@ async function computeSnapshot(db: SupabaseClient): Promise<MachineMonitorSnapsh
         break;
       case "no_doses":
         summary.withoutVends += 1;
+        break;
+      case "no_doses_ticket_open":
+        summary.ticketsOpen += 1;
         break;
       case "no_installation":
         summary.noInstallation += 1;
@@ -272,8 +336,12 @@ async function computeSnapshot(db: SupabaseClient): Promise<MachineMonitorSnapsh
       vendCountLast2Hours: vend?.vendCount ?? 0,
       quantityLast2Hours: vend?.totalQuantity ?? 0,
       status,
+      ticketId: status === "no_doses_ticket_open" ? flag!.ticketId : null,
+      ticketOpenedAt: status === "no_doses_ticket_open" ? flag!.openedAt : null,
     };
   });
+
+  await resolveTicketFlags(db, machineIdsToResolve);
 
   await logEvent(db, "vmpay", "VMPAY_SNAPSHOT_COMPUTED", {
     ...summary,

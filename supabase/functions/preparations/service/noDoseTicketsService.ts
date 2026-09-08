@@ -136,6 +136,12 @@ export async function createNoDoseTickets(
   const customerIdByAsset = await resolveCustomerIdsByAsset(db, assetNumbers);
 
   const results: NoDoseTicketResult[] = new Array(machines.length);
+  // Grava em machine_no_dose_tickets (tabela lida por vmpay/service/
+  // vmpayService.ts) pra a máquina sair do grupo "sem doses" e virar
+  // "Chamado aberto" já no próximo snapshot — sem isso o chamado é aberto
+  // na Auvo mas a tela de Telemetria não tem como saber e continuaria
+  // mostrando a máquina junto com quem ainda não tem chamado nenhum.
+  const flagsToInsert: Record<string, unknown>[] = [];
   let cursor = 0;
 
   async function worker() {
@@ -152,6 +158,16 @@ export async function createNoDoseTickets(
           ticketId: created.ticketId,
           matchedCustomer: customerId !== undefined,
         };
+        if (machine.machineId != null) {
+          flagsToInsert.push({
+            machine_id: machine.machineId,
+            asset_number: machine.assetNumber,
+            auvo_ticket_id: created.ticketId,
+            auvo_customer_id: customerId ?? null,
+            opened_by: caller.id,
+            opened_by_name: caller.name ?? caller.email ?? null,
+          });
+        }
       } catch (error) {
         results[index] = {
           assetNumber: machine.assetNumber,
@@ -165,6 +181,16 @@ export async function createNoDoseTickets(
   }
 
   await Promise.all(Array.from({ length: Math.min(CONCURRENCY, machines.length) }, worker));
+
+  if (flagsToInsert.length > 0) {
+    const { error: flagError } = await db.from("machine_no_dose_tickets").insert(flagsToInsert);
+    // Não-fatal: o ticket já foi criado na Auvo com sucesso, essa gravação
+    // só alimenta a coluna de status em Telemetria — se falhar, a máquina
+    // só continua aparecendo como "sem doses" até alguém rodar de novo.
+    if (flagError) {
+      await logEvent(db, "auvo", "AUVO_NO_DOSE_FLAG_INSERT_FAILED", { message: flagError.message, count: flagsToInsert.length });
+    }
+  }
 
   const ok = results.filter((r) => r.ok).length;
   await logEvent(db, "auvo", "AUVO_NO_DOSE_TICKETS_BULK_RESULT", {

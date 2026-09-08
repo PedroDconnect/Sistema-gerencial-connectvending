@@ -33,10 +33,19 @@ export async function route(req: Request, db: SupabaseClient): Promise<Response>
 
     // "Rodar análise" na tela de Telemetria (08/09/2026) — disparada de um
     // módulo diferente ("telemetria"), checagem própria antes do gate
-    // genérico de "preparacoes" logo abaixo.
+    // genérico de "preparacoes" logo abaixo. Liberado pra toda a família
+    // "Operação" (pedido do usuário: abrir pra mais perfis de acesso, não
+    // só quem tem Telemetria ou Preparações — todos esses módulos já
+    // lidam com chamado/operação no dia a dia).
     if (subPath[0] === "no-dose-tickets" && !subPath[1]) {
       if (req.method !== "POST") throw new ControlledError("Método não suportado.", 405);
-      const caller = await requireAnyModuleAccess(db, req, ["preparacoes", "telemetria"]);
+      const caller = await requireAnyModuleAccess(db, req, [
+        "preparacoes",
+        "telemetria",
+        "operacao-chamados",
+        "operacao-rotina",
+        "operacao-completa",
+      ]);
       return await handleCreateNoDoseTickets(db, caller, req);
     }
 
