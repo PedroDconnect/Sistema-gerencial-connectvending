@@ -99,132 +99,146 @@ export function NoDoseTicketsModal({ machines, onClose }) {
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 14, padding: "4px 24px 24px" }}>
-          {!results && (
-            <>
-              <label className="form-field">
-                <span className="form-field__label">Tipo de solicitação</span>
-                {typesError && <span className="form-field__error">{typesError.message}</span>}
-                <select
-                  className="form-field__input"
-                  required
-                  value={requestTypeId}
-                  onChange={(e) => setRequestTypeId(e.target.value)}
-                  disabled={loadingTypes}
-                >
-                  <option value="">{loadingTypes ? "Carregando…" : "Selecione…"}</option>
-                  {requestTypes.map((type) => (
-                    <option key={type.id} value={type.id}>
-                      {type.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                <span className="form-field__label" style={{ margin: 0 }}>
-                  {selected.size} de {machines.length} máquinas selecionadas
-                </span>
-                <div style={{ display: "flex", gap: 8 }}>
-                  <button type="button" className="btn btn--ghost" onClick={selectAll}>
-                    Selecionar todas
-                  </button>
-                  <button type="button" className="btn btn--ghost" onClick={clearAll}>
-                    Limpar seleção
-                  </button>
-                </div>
-              </div>
-
-              <div className="ativos-table-wrap" style={{ maxHeight: 340, overflowY: "auto" }}>
-                <table className="data-table ativos-table">
-                  <thead>
-                    <tr>
-                      <th style={{ width: 32 }}></th>
-                      <th>Asset</th>
-                      <th>Cliente/Local</th>
-                      <th>Última comunicação</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {machines.map((m) => (
-                      <tr key={m.machineId} onClick={() => toggle(m.machineId)} style={{ cursor: "pointer" }}>
-                        <td>
-                          <input type="checkbox" checked={selected.has(m.machineId)} onChange={() => toggle(m.machineId)} onClick={(e) => e.stopPropagation()} />
-                        </td>
-                        <td className="num">{m.assetNumber || `#${m.machineId}`}</td>
-                        <td className="ativos-table__truncate" title={m.locationName || undefined}>
-                          {m.locationName || <span className="ativos-table__muted">—</span>}
-                        </td>
-                        <td className="num">{formatDateTime(m.lastCommunicationAt)}</td>
-                      </tr>
+        {/* Painel inteiro tem max-height:85vh + overflow:hidden (App.css) —
+            header fixo acima, footer fixo abaixo, só o meio rola. Sem isso
+            a lista de 100+ máquinas empurra os botões "Abrir chamados"/
+            "Cancelar" pra fora da área visível (bug reportado 08/09/2026). */}
+        <form
+          onSubmit={handleSubmit}
+          style={{ display: "flex", flexDirection: "column", flex: "1 1 auto", minHeight: 0, overflow: "hidden" }}
+        >
+          <div
+            className="metric-modal-panel__body"
+            style={{ display: "flex", flexDirection: "column", gap: 14, flex: "1 1 auto", minHeight: 0 }}
+          >
+            {!results && (
+              <>
+                <label className="form-field">
+                  <span className="form-field__label">Tipo de solicitação</span>
+                  {typesError && <span className="form-field__error">{typesError.message}</span>}
+                  <select
+                    className="form-field__input"
+                    required
+                    value={requestTypeId}
+                    onChange={(e) => setRequestTypeId(e.target.value)}
+                    disabled={loadingTypes}
+                  >
+                    <option value="">{loadingTypes ? "Carregando…" : "Selecione…"}</option>
+                    {requestTypes.map((type) => (
+                      <option key={type.id} value={type.id}>
+                        {type.name}
+                      </option>
                     ))}
-                  </tbody>
-                </table>
-              </div>
+                  </select>
+                </label>
 
-              {submitError && <span className="form-field__error">{submitError.message}</span>}
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                  <span className="form-field__label" style={{ margin: 0 }}>
+                    {selected.size} de {machines.length} máquinas selecionadas
+                  </span>
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <button type="button" className="btn btn--ghost" onClick={selectAll}>
+                      Selecionar todas
+                    </button>
+                    <button type="button" className="btn btn--ghost" onClick={clearAll}>
+                      Limpar seleção
+                    </button>
+                  </div>
+                </div>
 
-              <div className="admin-users__actions">
+                <div className="ativos-table-wrap" style={{ flex: "1 1 auto", minHeight: 0, overflowY: "auto" }}>
+                  <table className="data-table ativos-table">
+                    <thead>
+                      <tr>
+                        <th style={{ width: 32 }}></th>
+                        <th>Asset</th>
+                        <th>Cliente/Local</th>
+                        <th>Última comunicação</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {machines.map((m) => (
+                        <tr key={m.machineId} onClick={() => toggle(m.machineId)} style={{ cursor: "pointer" }}>
+                          <td>
+                            <input type="checkbox" checked={selected.has(m.machineId)} onChange={() => toggle(m.machineId)} onClick={(e) => e.stopPropagation()} />
+                          </td>
+                          <td className="num">{m.assetNumber || `#${m.machineId}`}</td>
+                          <td className="ativos-table__truncate" title={m.locationName || undefined}>
+                            {m.locationName || <span className="ativos-table__muted">—</span>}
+                          </td>
+                          <td className="num">{formatDateTime(m.lastCommunicationAt)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                {submitError && <span className="form-field__error">{submitError.message}</span>}
+              </>
+            )}
+
+            {results && (
+              <>
+                <div className="state-warning-block" style={{ borderColor: failCount > 0 ? undefined : "transparent" }}>
+                  <strong>
+                    {okCount} chamado{okCount === 1 ? "" : "s"} criado{okCount === 1 ? "" : "s"}
+                    {failCount > 0 ? `, ${failCount} falharam` : ""}.
+                  </strong>
+                </div>
+
+                <div className="ativos-table-wrap" style={{ flex: "1 1 auto", minHeight: 0, overflowY: "auto" }}>
+                  <table className="data-table ativos-table">
+                    <thead>
+                      <tr>
+                        <th>Asset</th>
+                        <th>Resultado</th>
+                        <th>Cliente</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {machines
+                        .filter((m) => resultByMachineId?.has(m.machineId))
+                        .map((m) => {
+                          const r = resultByMachineId.get(m.machineId);
+                          return (
+                            <tr key={m.machineId}>
+                              <td className="num">{m.assetNumber || `#${m.machineId}`}</td>
+                              <td>
+                                {r.ok ? (
+                                  <span className="badge badge--success">Ticket #{r.ticketId}</span>
+                                ) : (
+                                  <span className="badge badge--danger" title={r.error}>
+                                    Falhou
+                                  </span>
+                                )}
+                              </td>
+                              <td>{r.matchedCustomer ? "Identificado" : "Não identificado"}</td>
+                            </tr>
+                          );
+                        })}
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            )}
+          </div>
+
+          <div className="admin-users__actions" style={{ padding: "12px 20px", borderTop: "1px solid var(--border-hairline)", flex: "0 0 auto" }}>
+            {!results ? (
+              <>
                 <button type="button" className="btn btn--ghost" onClick={onClose}>
                   Cancelar
                 </button>
                 <button type="submit" className="btn btn--primary" disabled={!canSubmit || submitting}>
                   {submitting ? "Abrindo chamados…" : `Abrir ${selected.size} chamado${selected.size === 1 ? "" : "s"}`}
                 </button>
-              </div>
-            </>
-          )}
-
-          {results && (
-            <>
-              <div className="state-warning-block" style={{ borderColor: failCount > 0 ? undefined : "transparent" }}>
-                <strong>
-                  {okCount} chamado{okCount === 1 ? "" : "s"} criado{okCount === 1 ? "" : "s"}
-                  {failCount > 0 ? `, ${failCount} falharam` : ""}.
-                </strong>
-              </div>
-
-              <div className="ativos-table-wrap" style={{ maxHeight: 340, overflowY: "auto" }}>
-                <table className="data-table ativos-table">
-                  <thead>
-                    <tr>
-                      <th>Asset</th>
-                      <th>Resultado</th>
-                      <th>Cliente</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {machines
-                      .filter((m) => resultByMachineId?.has(m.machineId))
-                      .map((m) => {
-                        const r = resultByMachineId.get(m.machineId);
-                        return (
-                          <tr key={m.machineId}>
-                            <td className="num">{m.assetNumber || `#${m.machineId}`}</td>
-                            <td>
-                              {r.ok ? (
-                                <span className="badge badge--success">Ticket #{r.ticketId}</span>
-                              ) : (
-                                <span className="badge badge--danger" title={r.error}>
-                                  Falhou
-                                </span>
-                              )}
-                            </td>
-                            <td>{r.matchedCustomer ? "Identificado" : "Não identificado"}</td>
-                          </tr>
-                        );
-                      })}
-                  </tbody>
-                </table>
-              </div>
-
-              <div className="admin-users__actions">
-                <button type="button" className="btn btn--primary" onClick={onClose}>
-                  Fechar
-                </button>
-              </div>
-            </>
-          )}
+              </>
+            ) : (
+              <button type="button" className="btn btn--primary" onClick={onClose}>
+                Fechar
+              </button>
+            )}
+          </div>
         </form>
       </div>
     </div>
