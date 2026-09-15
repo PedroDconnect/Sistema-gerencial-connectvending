@@ -8,14 +8,20 @@ import { fetchTicketRequestTypes, createTechnicalVisit } from "../../lib/prepara
 // simples que o de Pedido de Preparação: ticket direto na Auvo, sem
 // ficha, sem PDF, sem pedido — só cliente, tipo de solicitação, título e
 // descrição.
-export function TechnicalVisitModal({ onClose, onCreated }) {
+// `initialDescription` pré-preenche o texto (usado pelo ConnectFash pra
+// referenciar a OS de origem num "chamado vinculado") — não existe prop de
+// cliente pré-selecionado porque customer.id aqui é o PK interno de
+// auvo_customers, diferente do customerId (id da Auvo) que o resto do app
+// usa pra agregações; sem uma tradução confiável entre os dois espaços de
+// id, forçar o cliente errado seria pior que deixar a busca manual.
+export function TechnicalVisitModal({ onClose, onCreated, initialDescription = "" }) {
   const [customer, setCustomer] = useState(null);
   const [requestTypes, setRequestTypes] = useState([]);
   const [loadingTypes, setLoadingTypes] = useState(true);
   const [typesError, setTypesError] = useState(null);
   const [requestTypeId, setRequestTypeId] = useState("");
   const [title, setTitle] = useState("");
-  const [description, setDescription] = useState("");
+  const [description, setDescription] = useState(initialDescription);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState(null);
 

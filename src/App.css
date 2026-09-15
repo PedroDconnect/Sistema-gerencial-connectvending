@@ -617,9 +617,36 @@
 .kpi-card__delta--down {
   color: var(--status-critical);
 }
+/* Pra métrica de volume puro (ex.: atividades registradas), onde subir ou
+   descer não é "bom" nem "ruim" por si só — sem cor de estado, só a seta
+   indicando direção. */
+.kpi-card__delta--neutral {
+  color: var(--text-secondary);
+}
 .kpi-card__delta-caption {
   color: var(--text-faint);
   font-weight: 400;
+}
+
+/* ConnectFash: 4 KPIs macro (Atividades/Técnicos ativos/Agendas/Corretivos)
+   — mesma grade responsiva de .kpi-grid, só menos colunas na base pra não
+   sobrar espaço vazio com 4 tiles numa grade pensada pra 5. */
+.kpi-grid--connectfash {
+  grid-template-columns: repeat(4, 1fr);
+}
+
+/* Top Clientes / Top Técnicos lado a lado — 2 colunas simétricas (não
+   reaproveita .operacao-breakdowns-grid porque essa é fixa em 3, deixaria
+   uma coluna vazia com só 2 cartões). */
+.connectfash-rankings {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+@media (max-width: 900px) {
+  .connectfash-rankings {
+    grid-template-columns: 1fr;
+  }
 }
 
 /* ---------- Middle grid ---------- */
