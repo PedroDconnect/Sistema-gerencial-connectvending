@@ -3,7 +3,13 @@ sync_recent.py — sem dependência externa (dateutil etc.), só stdlib."""
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import datetime, timedelta, timezone
+
+# Fixo (Brasil não tem mais horário de verão desde 2019) — mesmo raciocínio
+# de BRAZIL_TZ em auvo_client.py. O runner do GitHub Actions roda em UTC;
+# sem isso, "mês atual" podia divergir do calendário de Brasília nas poucas
+# horas em que os dois já mudaram de dia em UTC mas não em Brasília.
+BRAZIL_TZ = timezone(timedelta(hours=-3))
 
 
 def parse_month(value: str) -> tuple[int, int]:
@@ -15,7 +21,7 @@ def parse_month(value: str) -> tuple[int, int]:
 
 
 def current_month() -> tuple[int, int]:
-    today = date.today()
+    today = datetime.now(BRAZIL_TZ)
     return today.year, today.month
 
 

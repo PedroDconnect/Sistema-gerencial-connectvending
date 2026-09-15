@@ -25,6 +25,8 @@ from datetime import datetime, timedelta, timezone
 
 import requests
 
+from months import current_month
+
 AUVO_BASE_URL = "https://api.auvo.com.br/v2"
 AUVO_MAX_PAGE_SIZE = 100  # teto da própria Auvo — confirmado: 150 -> HTTP 400
 # O TS usa 25s (AUVO_REQUEST_TIMEOUT_MS) porque atende um request HTTP ao
@@ -151,12 +153,21 @@ class AuvoClient:
 
     def fetch_month(self, year: int, month: int) -> list[dict]:
         """Busca TODAS as tarefas do mês (sem filtro de tipo/status/técnico —
-        é um dump completo), paginando com concorrência limitada. Levanta
-        exceção (não grava nada) se a contagem final não bater com o
-        totalItems reportado pela Auvo — melhor falhar alto do que gravar um
-        mês incompleto silenciosamente no data lake."""
+        é um dump completo), paginando com concorrência limitada.
+
+        Validação de contagem final vs. totalItems (reportado na 1ª página)
+        só é estrita pra mês FECHADO (qualquer mês anterior ao atual) — um
+        mês fechado não deveria ganhar tarefa nova no meio da busca, então
+        divergência ali é sinal real de página perdida. O mês EM ANDAMENTO é
+        um alvo móvel de propósito (confirmado ao vivo, run #34967581403:
+        ~22 mil tarefas de setembro/2026, buscar todas levou minutos o
+        bastante pra novas tarefas serem criadas no meio do caminho) — pra
+        esse caso a divergência é esperada, só logamos e seguimos com o que
+        foi coletado (é um snapshot "como estava agora", o sync diário
+        refaz esse mesmo mês de novo amanhã)."""
         start, end = month_range(year, month)
         param_filter = {"startDate": start, "endDate": end}
+        is_closed_month = (year, month) < current_month()
 
         first_items, total = self.list_tasks_page(param_filter, page=1)
         if total == 0:
@@ -176,10 +187,13 @@ class AuvoClient:
                     all_items.extend(items)
 
         if len(all_items) != total:
-            raise AuvoError(
-                f"{year}-{month:02d}: Auvo reportou {total} tarefas mas coletamos {len(all_items)} — "
-                "mês não será gravado no data lake, rode de novo."
+            message = (
+                f"{year}-{month:02d}: Auvo reportou {total} tarefa(s) na 1ª página mas coletamos "
+                f"{len(all_items)} no total."
             )
+            if is_closed_month:
+                raise AuvoError(f"{message} Mês fechado não deveria mudar — mês não será gravado, rode de novo.")
+            print(f"[aviso] {message} Mês em andamento, esperado — gravando snapshot de {len(all_items)} tarefa(s).")
         return all_items
 
 
