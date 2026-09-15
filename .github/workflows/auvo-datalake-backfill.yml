@@ -1,0 +1,50 @@
+name: Auvo Data Lake - Backfill
+
+on:
+  workflow_dispatch:
+    inputs:
+      start_month:
+        description: "Mês inicial (YYYY-MM)"
+        required: false
+        default: "2026-01"
+      end_month:
+        description: "Mês final (YYYY-MM) — vazio usa o mês atual"
+        required: false
+        default: ""
+      force:
+        description: "Refazer mesmo que o mês já exista no B2"
+        type: boolean
+        default: false
+
+jobs:
+  backfill:
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - run: pip install -r datalake/requirements.txt
+
+      - name: Rodar backfill
+        working-directory: datalake
+        env:
+          AUVO_API_KEY: ${{ secrets.AUVO_API_KEY }}
+          AUVO_API_TOKEN: ${{ secrets.AUVO_API_TOKEN }}
+          B2_APPLICATION_KEY_ID: ${{ secrets.B2_APPLICATION_KEY_ID }}
+          B2_APPLICATION_KEY: ${{ secrets.B2_APPLICATION_KEY }}
+          B2_BUCKET_NAME: ${{ vars.B2_BUCKET_NAME }}
+          B2_REGION: ${{ vars.B2_REGION }}
+          INPUT_START_MONTH: ${{ inputs.start_month }}
+          INPUT_END_MONTH: ${{ inputs.end_month }}
+          INPUT_FORCE: ${{ inputs.force }}
+        # Inputs passados via env (não interpolados direto no script) — evita
+        # que um valor com caractere especial vire injeção de shell.
+        run: |
+          ARGS=(--start-month "$INPUT_START_MONTH")
+          if [ -n "$INPUT_END_MONTH" ]; then ARGS+=(--end-month "$INPUT_END_MONTH"); fi
+          if [ "$INPUT_FORCE" = "true" ]; then ARGS+=(--force); fi
+          python backfill.py "${ARGS[@]}"
