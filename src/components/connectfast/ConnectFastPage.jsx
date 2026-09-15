@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Icon } from "../Icon";
 import { StatTile } from "../ativos/StatTile";
 import { BreakdownTable } from "../operacao/BreakdownTable";
@@ -213,6 +213,9 @@ function TypeMixDonut({ items }) {
   );
 }
 
+const MAX_AUTO_RETRIES = 2;
+const AUTO_RETRY_DELAY_MS = 8000;
+
 export function ConnectFastPage() {
   const [periodId, setPeriodId] = useState("7d");
   const [selectedEntity, setSelectedEntity] = useState(null); // { type: "technician" | "customer", id, label }
@@ -220,6 +223,7 @@ export function ConnectFastPage() {
   const [modalMode, setModalMode] = useState(null); // null | "choose" | "order" | "visit"
   const [linkContext, setLinkContext] = useState(null); // { taskId, taskTypeName, customerName } | null
   const [actionSuccess, setActionSuccess] = useState(null);
+  const [autoRetryCount, setAutoRetryCount] = useState(0);
 
   const ranges = useMemo(() => buildRanges(periodId), [periodId]);
   const details = useOperacaoDetails(ranges.current);
@@ -296,6 +300,7 @@ export function ConnectFastPage() {
   }));
 
   function refreshAll() {
+    setAutoRetryCount(0);
     details.refetch();
     previousDetails.refetch();
     customers.refetch();
@@ -310,6 +315,30 @@ export function ConnectFastPage() {
   }
 
   const anyError = details.error ?? previousDetails.error;
+  // Mesmo problema que OperacaoPage.jsx já tratava (ver commit
+  // "Retry automatico..."): quando a Auvo não responde a tempo, /details
+  // volta com dataIncomplete=true e números bem menores que o real (não é
+  // erro tecnicamente, então "anyError" fica vazio) — sem essa checagem, o
+  // painel mostrava esses números parciais como se fossem certos, dando a
+  // impressão de "não carregou nada". Mesmo retry automático de 2
+  // tentativas (8s de intervalo) antes de admitir que precisa de um clique.
+  const isDetailsIncomplete = !anyError && (Boolean(data?.dataIncomplete) || Boolean(prevData?.dataIncomplete));
+  const autoRetrying = isDetailsIncomplete && autoRetryCount < MAX_AUTO_RETRIES;
+  const showSkeleton = details.loading || previousDetails.loading || autoRetrying;
+
+  useEffect(() => {
+    if (!isDetailsIncomplete || autoRetryCount >= MAX_AUTO_RETRIES) return undefined;
+    const timer = setTimeout(() => {
+      setAutoRetryCount((count) => count + 1);
+      details.refetch();
+      previousDetails.refetch();
+    }, AUTO_RETRY_DELAY_MS);
+    return () => clearTimeout(timer);
+  }, [isDetailsIncomplete, autoRetryCount]);
+
+  useEffect(() => {
+    setAutoRetryCount(0);
+  }, [ranges]);
 
   return (
     <main className="main">
@@ -347,6 +376,24 @@ export function ConnectFastPage() {
         </div>
       )}
 
+      {autoRetrying && (
+        <div className="state-warning-block" style={{ borderColor: "var(--accent)" }}>
+          <strong>Atualizando os dados do painel…</strong>
+        </div>
+      )}
+
+      {isDetailsIncomplete && !autoRetrying && (
+        <div className="state-warning-block" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
+          <div>
+            <strong>Não foi possível carregar os dados completos deste período.</strong>
+            <p>A Auvo demorou demais pra responder. Tente atualizar de novo em alguns instantes.</p>
+          </div>
+          <button type="button" className="btn btn--primary" onClick={refreshAll}>
+            Tentar novamente
+          </button>
+        </div>
+      )}
+
       {actionSuccess && (
         <div className="state-warning-block" style={{ borderColor: "var(--status-good)" }}>
           <strong>{actionSuccess}</strong>
@@ -370,7 +417,7 @@ export function ConnectFastPage() {
       </div>
 
       <section className="kpi-grid kpi-grid--connectfast">
-        {details.loading || previousDetails.loading
+        {showSkeleton
           ? Array.from({ length: 4 }).map((_, i) => <div key={i} className="kpi-card kpi-card--skeleton" />)
           : [
               <GerencialKpi
@@ -397,7 +444,7 @@ export function ConnectFastPage() {
       </section>
 
       <section className="operacao-kpi-grid operacao-kpi-grid--compact">
-        {details.loading || previousDetails.loading ? (
+        {showSkeleton ? (
           Array.from({ length: 3 }).map((_, i) => <div key={i} className="stat-tile stat-tile--skeleton" />)
         ) : (
           <>
@@ -412,7 +459,7 @@ export function ConnectFastPage() {
         <TypeMixDonut items={donutItems} />
         <section className="card">
           <h2 className="card-title">Comparação com o período anterior</h2>
-          {details.loading || previousDetails.loading ? (
+          {showSkeleton ? (
             <div className="skeleton" style={{ height: 120, marginTop: 14 }} />
           ) : (
             <>
@@ -447,7 +494,7 @@ export function ConnectFastPage() {
       <section className="connectfast-rankings">
         <section className="card operacao-breakdown-table">
           <h2 className="card-title">Top Clientes</h2>
-          {details.loading ? (
+          {showSkeleton ? (
             <div className="skeleton" style={{ height: 160, marginTop: 14 }} />
           ) : topClientes.length === 0 ? (
             <div className="state-empty" style={{ height: 100 }}>
@@ -470,7 +517,7 @@ export function ConnectFastPage() {
         </section>
         <section className="card operacao-breakdown-table">
           <h2 className="card-title">Top Técnicos</h2>
-          {details.loading ? (
+          {showSkeleton ? (
             <div className="skeleton" style={{ height: 160, marginTop: 14 }} />
           ) : topTecnicos.length === 0 ? (
             <div className="state-empty" style={{ height: 100 }}>
@@ -497,14 +544,14 @@ export function ConnectFastPage() {
         title="Técnicos com atividade no período"
         nameLabel="Técnico"
         rows={byTechnicianByRate}
-        loading={details.loading}
+        loading={showSkeleton}
         highlightRate
       />
 
       <ClientesComMaquinas
         customers={customers.items}
         openByCustomerId={openByCustomerId}
-        loading={customers.loading || details.loading}
+        loading={customers.loading || showSkeleton}
         onSelectCustomer={(id, label) => setSelectedEntity({ type: "customer", id, label })}
       />
 
