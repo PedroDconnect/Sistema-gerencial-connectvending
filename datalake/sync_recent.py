@@ -18,6 +18,7 @@ import sys
 from auvo_client import AuvoClient, fetch_month_resilient
 from b2_storage import build_client, upload_month
 from months import add_months, current_month, format_month
+from supabase_sync import push_tasks
 
 
 def main() -> int:
@@ -49,6 +50,14 @@ def main() -> int:
         except Exception as exc:  # noqa: BLE001
             print(f"[erro]  {label}: {exc}", file=sys.stderr)
             failures.append(label)
+            continue
+
+        try:
+            upserted = push_tasks(tasks)
+            print(f"[supabase] {label}: {upserted} tarefa(s) upsertadas em auvo_tasks_history")
+        except Exception as exc:  # noqa: BLE001 — B2 já está gravado; não desfaz por causa disso
+            print(f"[erro]  {label}: gravou no B2 mas falhou ao empurrar pro Supabase: {exc}", file=sys.stderr)
+            failures.append(label + " (supabase)")
 
     if failures:
         print(f"\n{len(failures)} mês(es) falharam: {', '.join(failures)}.")

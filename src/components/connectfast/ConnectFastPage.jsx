@@ -8,6 +8,7 @@ import { NewOrderWizard } from "../preparations/NewOrderWizard";
 import { TechnicalVisitModal } from "../preparations/TechnicalVisitModal";
 import { EntityDrawer } from "./EntityDrawer";
 import { ClientesComMaquinas } from "./ClientesComMaquinas";
+import { HistoricoTab } from "./HistoricoTab";
 import { useOperacaoDetails } from "../../hooks/useOperacaoDetails";
 import { useOperacaoCompletaCustomers } from "../../hooks/useOperacaoCompletaCustomers";
 
@@ -214,6 +215,7 @@ function TypeMixDonut({ items }) {
 }
 
 export function ConnectFastPage() {
+  const [tab, setTab] = useState("visao-geral");
   const [periodId, setPeriodId] = useState("7d");
   const [selectedEntity, setSelectedEntity] = useState(null); // { type: "technician" | "customer", id, label }
   const [selectedTaskId, setSelectedTaskId] = useState(null);
@@ -356,6 +358,19 @@ export function ConnectFastPage() {
         </div>
       )}
 
+      <div className="segmented" style={{ alignSelf: "flex-start" }}>
+        <button type="button" className={`segmented__btn ${tab === "visao-geral" ? "is-active" : ""}`} onClick={() => setTab("visao-geral")}>
+          Visão Geral
+        </button>
+        <button type="button" className={`segmented__btn ${tab === "historico" ? "is-active" : ""}`} onClick={() => setTab("historico")}>
+          Histórico
+        </button>
+      </div>
+
+      {tab === "historico" && <HistoricoTab />}
+
+      {tab === "visao-geral" && (
+        <>
       <div className="segmented operacao-filters__periods" style={{ alignSelf: "flex-start" }}>
         {PERIODS.map((preset) => (
           <button
@@ -507,6 +522,8 @@ export function ConnectFastPage() {
         loading={customers.loading || details.loading}
         onSelectCustomer={(id, label) => setSelectedEntity({ type: "customer", id, label })}
       />
+        </>
+      )}
 
       {selectedEntity && (
         <EntityDrawer

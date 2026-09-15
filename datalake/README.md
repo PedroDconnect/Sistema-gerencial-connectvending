@@ -36,11 +36,15 @@ No GitHub do repositório, em **Settings → Secrets and variables → Actions**
 | `B2_APPLICATION_KEY_ID` | Application Key ID gerada no Backblaze B2 (recomendado: uma key nova, com permissão só nesse bucket) |
 | `B2_APPLICATION_KEY` | Application Key correspondente |
 
+| `HISTORY_INGEST_TOKEN` | valor aleatório qualquer, gerado por você — cadastre o MESMO valor aqui e via `supabase secrets set HISTORY_INGEST_TOKEN=...` (o Edge Function confere os dois batendo antes de aceitar gravação em `auvo_tasks_history`) |
+
 **Variables** (não sensíveis, ficam visíveis nos logs):
 | Nome | Valor |
 |---|---|
 | `B2_BUCKET_NAME` | nome do bucket já criado no Backblaze |
 | `B2_REGION` | região do bucket, ex. `us-west-002` — está na página do bucket no painel do Backblaze |
+| `SUPABASE_FUNCTIONS_URL` | `https://<projeto>.supabase.co/functions/v1/operation` (mesma base de `VITE_SUPABASE_FRONTEND_URL` + `/functions/v1/operation`) |
+| `SUPABASE_ANON_KEY` | a anon key do projeto (já pública, é a mesma usada no frontend) |
 
 ## Rodar o backfill histórico (uma vez)
 
@@ -79,11 +83,28 @@ manual com `force` só naquele mês.
 
 Pode disparar manualmente também (aba Actions → esse workflow → Run workflow).
 
+## Camada curada no Supabase (aba "Histórico" do ConnectFast)
+
+Além do arquivo bruto no B2, `backfill.py` e `sync_recent.py` empurram uma
+cópia normalizada de cada tarefa pro Supabase (`auvo_tasks_history`, ver
+`supabase/schema.sql`) via `POST /operation/history/ingest` — é essa tabela
+que a aba **Histórico** do ConnectFast consulta (`GET /history/summary`,
+`GET /history/tasks`), sem o limite de 31 dias da Auvo ao vivo.
+
+Pra popular a tabela pela primeira vez com meses que já estão no B2 (sem
+bater na Auvo de novo), rode o workflow **"Auvo Data Lake - Carga Inicial no
+Supabase"** (ou `python push_existing_to_supabase.py --months 2026-07,2026-08,2026-09`
+localmente, com as mesmas variáveis de ambiente). Dali em diante, todo
+backfill/sync novo já mantém a tabela em dia sozinho.
+
+Se B2 e Supabase ficarem dessincronizados por algum motivo (ex.: um mês
+existia no B2 antes do `HISTORY_INGEST_TOKEN` estar configurado, então foi
+pulado por já existir no bucket e nunca chegou a ser empurrado pro
+Supabase), rode `push_existing_to_supabase.py` de novo só pra esse mês —
+é idempotente (upsert por `auvo_task_id`).
+
 ## O que NÃO está feito ainda
 
-- **Ligar isso de volta no painel** (consultas de tendência histórica além
-  de 31 dias no ConnectFast) — este pipeline só _guarda_ o histórico bruto;
-  consumir esse histórico no dashboard é um passo separado, ainda não
-  decidido (provavelmente uma tabela agregada no Supabase, alimentada a
-  partir do que está no B2, no mesmo espírito de `machine_consumption_daily`).
-- Nenhuma camada "curada"/normalizada — só o raw JSON da Auvo, gzip por mês.
+- Nenhuma camada "curada" além da tabela de histórico (sem métricas
+  derivadas tipo SLA/completion rate — isso continua vivendo só na consulta
+  ao vivo de 31 dias do resto do painel).

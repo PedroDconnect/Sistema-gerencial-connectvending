@@ -2285,6 +2285,19 @@ button.multiselect__option {
   background: var(--accent);
 }
 
+/* Bolinha de cor categórica — tipo de chamado no ranking/tabela de
+   auditoria do Histórico (ConnectFast). Cor vinda inline (var(--series-*)
+   por tipo), esta classe só cuida do formato. */
+.cat-dot {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  border-radius: 2px;
+  margin-right: 8px;
+  vertical-align: middle;
+  flex-shrink: 0;
+}
+
 /* Chip do filtro por máquina ativo (header da seção de consumo) */
 .active-filter-chip {
   display: inline-flex;

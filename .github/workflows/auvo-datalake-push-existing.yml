@@ -1,15 +1,17 @@
-name: Auvo Data Lake - Sync Diario
+name: Auvo Data Lake - Carga Inicial no Supabase
 
 on:
-  schedule:
-    # 06:00 UTC = 03:00 America/Sao_Paulo (sem horario de verao desde 2019)
-    - cron: "0 6 * * *"
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      months:
+        description: "Meses ja arquivados no B2 a empurrar pro Supabase (YYYY-MM, separados por virgula)"
+        required: true
+        default: "2026-07,2026-08,2026-09"
 
 jobs:
-  sync:
+  push-existing:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
 
@@ -19,11 +21,9 @@ jobs:
 
       - run: pip install -r datalake/requirements.txt
 
-      - name: Reconferir meses recentes
+      - name: Empurrar meses existentes pro Supabase
         working-directory: datalake
         env:
-          AUVO_API_KEY: ${{ secrets.AUVO_API_KEY }}
-          AUVO_API_TOKEN: ${{ secrets.AUVO_API_TOKEN }}
           B2_APPLICATION_KEY_ID: ${{ secrets.B2_APPLICATION_KEY_ID }}
           B2_APPLICATION_KEY: ${{ secrets.B2_APPLICATION_KEY }}
           B2_BUCKET_NAME: ${{ vars.B2_BUCKET_NAME }}
@@ -31,4 +31,5 @@ jobs:
           SUPABASE_FUNCTIONS_URL: ${{ vars.SUPABASE_FUNCTIONS_URL }}
           SUPABASE_ANON_KEY: ${{ vars.SUPABASE_ANON_KEY }}
           HISTORY_INGEST_TOKEN: ${{ secrets.HISTORY_INGEST_TOKEN }}
-        run: python sync_recent.py --months 2
+          INPUT_MONTHS: ${{ inputs.months }}
+        run: python push_existing_to_supabase.py --months "$INPUT_MONTHS"

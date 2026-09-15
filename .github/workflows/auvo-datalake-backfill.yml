@@ -38,6 +38,9 @@ jobs:
           B2_APPLICATION_KEY: ${{ secrets.B2_APPLICATION_KEY }}
           B2_BUCKET_NAME: ${{ vars.B2_BUCKET_NAME }}
           B2_REGION: ${{ vars.B2_REGION }}
+          SUPABASE_FUNCTIONS_URL: ${{ vars.SUPABASE_FUNCTIONS_URL }}
+          SUPABASE_ANON_KEY: ${{ vars.SUPABASE_ANON_KEY }}
+          HISTORY_INGEST_TOKEN: ${{ secrets.HISTORY_INGEST_TOKEN }}
           INPUT_START_MONTH: ${{ inputs.start_month }}
           INPUT_END_MONTH: ${{ inputs.end_month }}
           INPUT_FORCE: ${{ inputs.force }}

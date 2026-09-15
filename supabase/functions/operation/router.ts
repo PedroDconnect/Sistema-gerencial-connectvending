@@ -17,6 +17,9 @@ import { handleMachineConsumption } from "./handlers/machineConsumption.ts";
 import { handleInconsistencies } from "./handlers/inconsistencies.ts";
 import { handleCustomerPanel } from "./handlers/customerPanel.ts";
 import { handleTasksSync } from "./handlers/tasksSync.ts";
+import { handleHistorySummary } from "./handlers/historySummary.ts";
+import { handleHistoryTasks } from "./handlers/historyTasks.ts";
+import { handleHistoryIngest } from "./handlers/historyIngest.ts";
 
 // Supabase casa só o primeiro segmento do path ("operation") com esta
 // function; o resto (/summary, /tasks/123, ...) sobra em req.url pra gente
@@ -43,6 +46,10 @@ export async function route(req: Request, db: SupabaseClient): Promise<Response>
     if (subPath[0] === "tasks-sync") {
       if (req.method !== "POST") throw new ControlledError("Método não suportado.", 405);
       return await handleTasksSync(db);
+    }
+    if (subPath[0] === "history" && subPath[1] === "ingest") {
+      if (req.method !== "POST") throw new ControlledError("Método não suportado.", 405);
+      return await handleHistoryIngest(db, req);
     }
 
     if (req.method !== "GET") {
@@ -72,6 +79,8 @@ export async function route(req: Request, db: SupabaseClient): Promise<Response>
       return await handleMachineConsumption(db, subPath[1], url);
     }
     if (subPath[0] === "inconsistencies") return await handleInconsistencies(db, url);
+    if (subPath[0] === "history" && subPath[1] === "summary") return await handleHistorySummary(db, url);
+    if (subPath[0] === "history" && subPath[1] === "tasks") return await handleHistoryTasks(db, url);
 
     throw new ControlledError("Rota não encontrada.", 404);
   } catch (error) {

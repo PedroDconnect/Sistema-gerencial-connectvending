@@ -757,4 +757,45 @@ create table if not exists machine_no_dose_tickets (
 
 create index if not exists machine_no_dose_tickets_open_idx on machine_no_dose_tickets (machine_id) where resolved_at is null;
 
+-- ---------- ConnectFast — histórico de chamados (data lake) ----------
+-- A Auvo ao vivo só aceita 31 dias por chamada (MAX_DATE_RANGE_DAYS,
+-- filters.ts) — rápido pro filtro de dia/semana do painel, inviável pra
+-- tendência de meses. Um pipeline externo (Python + GitHub Actions, fora
+-- do Supabase pra não esbarrar no tempo de execução de Edge Function)
+-- busca o histórico completo direto na Auvo, guarda o bruto no Backblaze
+-- B2 (arquivo, ver datalake/README.md) e empurra uma cópia curada aqui via
+-- POST /operation/history/ingest — é essa tabela que a aba "Histórico" do
+-- ConnectFast consulta. Mesmo padrão de auvo_tasks_cache: RLS ligado, sem
+-- nenhuma policy, só a service role (a própria função "operation" já roda
+-- assim, ver index.ts) lê/escreve.
+create table if not exists auvo_tasks_history (
+  id bigint generated always as identity primary key,
+  auvo_task_id bigint not null,
+  task_date date not null,
+  task_type_name text not null,
+  customer_id bigint,
+  customer_name text,
+  technician_id bigint,
+  technician_name text,
+  status int,
+  finished boolean not null default false,
+  task_url text,
+  synced_at timestamptz not null default now()
+);
+
+create unique index if not exists auvo_tasks_history_task_id_idx on auvo_tasks_history (auvo_task_id);
+create index if not exists auvo_tasks_history_date_idx on auvo_tasks_history (task_date);
+create index if not exists auvo_tasks_history_type_idx on auvo_tasks_history (task_type_name);
+create index if not exists auvo_tasks_history_technician_idx on auvo_tasks_history (technician_name);
+
+alter table auvo_tasks_history enable row level security;
+
+-- Agregado pronto (dia x tipo) pro gráfico de tendência — PostgREST não
+-- faz GROUP BY arbitrário, então a agregação mora aqui, mesmo espírito de
+-- auvo_customers_view (view de leitura, não uma tabela de negócio nova).
+create or replace view auvo_tasks_history_daily_by_type as
+  select task_date, task_type_name, count(*) as total
+  from auvo_tasks_history
+  group by task_date, task_type_name;
+
 alter table machine_no_dose_tickets enable row level security;

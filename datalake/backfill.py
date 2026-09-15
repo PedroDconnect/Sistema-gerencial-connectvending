@@ -19,6 +19,7 @@ import sys
 from auvo_client import AuvoClient, fetch_month_resilient
 from b2_storage import build_client, month_key, object_exists, upload_month
 from months import current_month, format_month, month_sequence, parse_month
+from supabase_sync import push_tasks
 
 DEFAULT_START_MONTH = "2026-01"
 
@@ -57,6 +58,14 @@ def main() -> int:
         except Exception as exc:  # noqa: BLE001 — queremos seguir pros outros meses e reportar no final
             print(f"[erro]  {label}: {exc}", file=sys.stderr)
             failures.append(label)
+            continue
+
+        try:
+            upserted = push_tasks(tasks)
+            print(f"[supabase] {label}: {upserted} tarefa(s) upsertadas em auvo_tasks_history")
+        except Exception as exc:  # noqa: BLE001 — B2 já está gravado; não desfaz por causa disso
+            print(f"[erro]  {label}: gravou no B2 mas falhou ao empurrar pro Supabase: {exc}", file=sys.stderr)
+            failures.append(label + " (supabase)")
 
     if failures:
         print(f"\n{len(failures)} mês(es) falharam: {', '.join(failures)}. Rode de novo (sem --force) pra retomar.")
