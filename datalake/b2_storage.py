@@ -37,7 +37,12 @@ def build_client():
         endpoint_url=f"https://s3.{region}.backblazeb2.com",
         aws_access_key_id=_env("B2_APPLICATION_KEY_ID"),
         aws_secret_access_key=_env("B2_APPLICATION_KEY"),
-        config=BotoConfig(retries={"max_attempts": 5, "mode": "standard"}),
+        # path-style explícito: URL assinada (generate_presigned_url) só bateu
+        # com o B2 nesse modo — confirmado ao vivo (15/09/2026), o padrão do
+        # boto3 gerava uma URL que o B2 recusava com "bucket is not
+        # authorized", mesmo o put_object/get_object autenticado direto
+        # funcionando normalmente sem essa opção.
+        config=BotoConfig(retries={"max_attempts": 5, "mode": "standard"}, s3={"addressing_style": "path"}),
     )
 
 
