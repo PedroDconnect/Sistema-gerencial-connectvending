@@ -9,8 +9,29 @@ referência da OS de origem — não pré-seleciona o cliente, porque o id de
 cliente usado por `TechnicalVisitModal` (`auvo_customers.id`, PK interna) é
 diferente do `customerId` (id da Auvo) usado nas agregações de tarefa, e não
 existe hoje uma tradução confiável entre os dois sem mais uma consulta.
-Painel Supervisor, categoria "Preventivo" e o data lake no Backblaze
-continuam pendentes (ver §5/§6, nada mudou aí).
+Painel Supervisor e categoria "Preventivo" continuam pendentes (ver §5).
+
+**Status (15/09/2026): Data lake (Backblaze B2) + aba "Histórico" no
+ConnectFast implementados.** Ver `datalake/README.md` pro pipeline completo
+(Auvo → B2 → `auvo_tasks_history` no Supabase) e
+`src/components/connectfast/HistoricoTab.jsx` pra tela. Histórico coletado
+desde 01/07/2026 (não desde janeiro — decisão de escopo do Pedro em
+15/09/2026, pra ter algo útil rápido; dá pra estender pra trás depois, o
+pipeline é retomável). **Pendente de deploy manual** (schema.sql e a Edge
+Function `operation` não têm CI — precisa rodar no Supabase antes da aba
+funcionar; ver checklist na conversa/commit `1d6a13f`).
+
+Descobertas relevantes durante a construção do data lake:
+- Existem **39 tipos reais** de tarefa na Auvo (não os 7 mapeados em
+  `taskTypeCategories.ts`) — incluindo `Preventiva` (categoria que o §5
+  original dizia "não existir"; existe, só não está mapeada no painel).
+  Ver `datalake/export_audit.py` pra lista completa.
+- Timeout de 25s (`AUVO_REQUEST_TIMEOUT_MS`, bom pra request ao vivo) não é
+  suficiente pra um pipeline em lote — a Auvo pode legitimamente demorar
+  mais que isso pra servir uma página pesada. `datalake/auvo_client.py` usa
+  60s + retry no nível do mês inteiro com pausa real.
+- Mês em andamento é um alvo móvel (tarefas sendo criadas durante a busca)
+  — validação de contagem exata só é estrita pra mês fechado.
 
 Origem: transcrição de voz do Pedro descrevendo o painel gerencial e o painel
 do supervisor. Este documento organiza o pedido e o confronta com o estado
