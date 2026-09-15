@@ -1,8 +1,8 @@
-# Painel ConnectFash — especificação (registrado em 14/09/2026)
+# Painel ConnectFast — especificação (registrado em 14/09/2026)
 
 **Status (14/09/2026): Etapa 2 (Painel Gerencial, dado real) implementada.**
-Ver `src/components/connectfash/` (`ConnectFashPage.jsx`, `EntityDrawer.jsx`,
-`ClientesComMaquinas.jsx`), nav item `connectfash` em `mockData.js`/`App.jsx`/
+Ver `src/components/connectfast/` (`ConnectFastPage.jsx`, `EntityDrawer.jsx`,
+`ClientesComMaquinas.jsx`), nav item `connectfast` em `mockData.js`/`App.jsx`/
 `supabase/functions/admin/shared/auth.ts`. "Vincular chamado" ficou mais
 simples do que o §1 descrevia: só pré-preenche o texto da descrição com a
 referência da OS de origem — não pré-seleciona o cliente, porque o id de
@@ -163,7 +163,7 @@ lake no Backblaze. Pontos em aberto antes de implementar:
    cadastro de técnico, e principalmente a estratégia de histórico —
    já pensando junto com o data lake do §6, não separado).
 3. Construir o sistema de verdade: novos componentes em
-   `src/components/connectFash/`, reaproveitando `OperacaoPage` e o fluxo de
+   `src/components/connectfast/`, reaproveitando `OperacaoPage` e o fluxo de
    abertura de chamado já existentes.
 4. Job de ETL + Backblaze (§6), rodando em paralelo/depois, alimentando o
    painel com histórico real desde janeiro.

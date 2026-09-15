@@ -8,7 +8,7 @@ export const navItems = [
   { id: "overview", label: "Visão Geral", icon: "home" },
   { id: "ativos", label: "Ativos", icon: "server" },
   { id: "preparacoes", label: "Pedidos de Preparação", icon: "clipboard" },
-  { id: "connectfash", label: "ConnectFash", icon: "trendUp" },
+  { id: "connectfast", label: "ConnectFast", icon: "trendUp" },
   {
     id: "operacao",
     label: "Operação",
@@ -45,7 +45,7 @@ export const ASSIGNABLE_MODULES = [
   { id: "overview", label: "Visão Geral" },
   { id: "ativos", label: "Ativos" },
   { id: "preparacoes", label: "Pedidos de Preparação" },
-  { id: "connectfash", label: "ConnectFash" },
+  { id: "connectfast", label: "ConnectFast" },
   { id: "operacao-chamados", label: "Operação · Chamados" },
   { id: "operacao-rotina", label: "Operação · Abastecimento Rotina" },
   { id: "telemetria", label: "Operação · Telemetria" },

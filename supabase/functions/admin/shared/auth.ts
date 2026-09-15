@@ -10,7 +10,7 @@ export const ASSIGNABLE_MODULE_IDS = new Set([
   "overview",
   "ativos",
   "preparacoes",
-  "connectfash",
+  "connectfast",
   "operacao-chamados",
   "operacao-rotina",
   "telemetria",

@@ -7,7 +7,7 @@ import { ChannelDonut } from "./components/ChannelDonut";
 import { Login } from "./components/Login";
 import { SetupNeeded } from "./components/SetupNeeded";
 import { AtivosPage } from "./components/ativos/AtivosPage";
-import { ConnectFashPage } from "./components/connectfash/ConnectFashPage";
+import { ConnectFastPage } from "./components/connectfast/ConnectFastPage";
 import { OperacaoPage } from "./components/operacao/OperacaoPage";
 import { TelemetriaPage } from "./components/telemetria/TelemetriaPage";
 import { OperacaoCompletaPage } from "./components/operacaoCompleta/OperacaoCompletaPage";
@@ -149,7 +149,7 @@ function App() {
     if (active === "overview") return <Dashboard />;
     if (active === "ativos") return <AtivosPage />;
     if (active === "preparacoes") return <PreparationOrdersPage />;
-    if (active === "connectfash") return <ConnectFashPage />;
+    if (active === "connectfast") return <ConnectFastPage />;
     if (active === "operacao-chamados") return <OperacaoPage scope="chamados" />;
     if (active === "operacao-rotina") return <OperacaoPage scope="rotina" />;
     if (active === "telemetria") return <TelemetriaPage />;

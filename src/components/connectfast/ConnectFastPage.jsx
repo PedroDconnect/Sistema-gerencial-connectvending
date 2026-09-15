@@ -20,7 +20,7 @@ const PERIODS = [
 // Categorias reais de supabase/functions/operation/service/taskTypeCategories.ts
 // — "técnico" = tudo que não é reposição de produto; "operacional" =
 // abastecimento (chamado avulso ou rotina programada). Não existe
-// categoria "preventivo" hoje (ver docs/painel-connectfash-spec.md §5) —
+// categoria "preventivo" hoje (ver docs/painel-connectfast-spec.md §5) —
 // de propósito não entra em nenhum dos dois grupos.
 const TECHNICAL_CATEGORY_KEYS = new Set([
   "chamadoCorretivo",
@@ -213,7 +213,7 @@ function TypeMixDonut({ items }) {
   );
 }
 
-export function ConnectFashPage() {
+export function ConnectFastPage() {
   const [periodId, setPeriodId] = useState("7d");
   const [selectedEntity, setSelectedEntity] = useState(null); // { type: "technician" | "customer", id, label }
   const [selectedTaskId, setSelectedTaskId] = useState(null);
@@ -315,7 +315,7 @@ export function ConnectFashPage() {
     <main className="main">
       <header className="topbar">
         <div>
-          <h1 className="topbar__title">ConnectFash</h1>
+          <h1 className="topbar__title">ConnectFast</h1>
           <p className="topbar__subtitle">
             Painel gerencial de chamados, técnicos e clientes — dado real, direto da Auvo.
           </p>
@@ -369,7 +369,7 @@ export function ConnectFashPage() {
         ))}
       </div>
 
-      <section className="kpi-grid kpi-grid--connectfash">
+      <section className="kpi-grid kpi-grid--connectfast">
         {details.loading || previousDetails.loading
           ? Array.from({ length: 4 }).map((_, i) => <div key={i} className="kpi-card kpi-card--skeleton" />)
           : [
@@ -444,7 +444,7 @@ export function ConnectFashPage() {
         </section>
       </div>
 
-      <section className="connectfash-rankings">
+      <section className="connectfast-rankings">
         <section className="card operacao-breakdown-table">
           <h2 className="card-title">Top Clientes</h2>
           {details.loading ? (

@@ -12,11 +12,11 @@ const SLA_BADGE = {
 
 const PAGE_SIZE = 10;
 
-// Drill-down do ConnectFash: lista as OS reais de um técnico ou cliente no
+// Drill-down do ConnectFast: lista as OS reais de um técnico ou cliente no
 // período selecionado (mesmo endpoint /tasks que a Auditoria Operacional
 // já usa) e deixa abrir o detalhe (TaskDetailDrawer, por cima deste) ou
 // vincular um novo chamado à OS. Só é montado quando `entity` existe — ver
-// ConnectFashPage — por isso não precisa lidar com entity===null aqui
+// ConnectFastPage — por isso não precisa lidar com entity===null aqui
 // dentro (mesmo motivo de useOperacaoTasks não ter guarda de "id vazio").
 export function EntityDrawer({ entity, rangeParams, onClose, onOpenTask, onLinkTask }) {
   const [page, setPage] = useState(1);

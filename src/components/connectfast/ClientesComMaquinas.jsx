@@ -4,7 +4,7 @@ const TOP_N = 10;
 // /customers (equipmentCount, ordenação por nome — não tem "ordenar por
 // máquinas" pronto, então a ordenação por equipmentCount é feita aqui) e
 // os totais "em aberto" por categoria técnica/operacional vindos de
-// dailyTypeMetrics (ver ConnectFashPage). O id de cliente muda de tipo
+// dailyTypeMetrics (ver ConnectFastPage). O id de cliente muda de tipo
 // entre as duas fontes (number na Auvo/assets, string nas agregações de
 // tarefa) — String() nos dois lados evita um join que silenciosamente
 // nunca bate.

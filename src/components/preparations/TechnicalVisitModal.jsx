@@ -8,7 +8,7 @@ import { fetchTicketRequestTypes, createTechnicalVisit } from "../../lib/prepara
 // simples que o de Pedido de Preparação: ticket direto na Auvo, sem
 // ficha, sem PDF, sem pedido — só cliente, tipo de solicitação, título e
 // descrição.
-// `initialDescription` pré-preenche o texto (usado pelo ConnectFash pra
+// `initialDescription` pré-preenche o texto (usado pelo ConnectFast pra
 // referenciar a OS de origem num "chamado vinculado") — não existe prop de
 // cliente pré-selecionado porque customer.id aqui é o PK interno de
 // auvo_customers, diferente do customerId (id da Auvo) que o resto do app
