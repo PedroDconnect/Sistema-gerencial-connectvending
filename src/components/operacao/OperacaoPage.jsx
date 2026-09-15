@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Icon } from "../Icon";
 import { StatTile } from "../ativos/StatTile";
 import { OperacaoFilters } from "./OperacaoFilters";
@@ -57,11 +57,15 @@ function buildParams(filters, scope) {
   return params;
 }
 
+const MAX_AUTO_RETRIES = 2;
+const AUTO_RETRY_DELAY_MS = 8000;
+
 export function OperacaoPage({ scope }) {
   const [filters, setFilters] = useState(EMPTY_FILTERS);
   const [selectedTaskId, setSelectedTaskId] = useState(null);
   const [auditPage, setAuditPage] = useState(1);
   const [auditPageSize, setAuditPageSize] = useState(25);
+  const [autoRetryCount, setAutoRetryCount] = useState(0);
 
   const meta = SCOPE_META[scope] ?? { title: "Operação", subtitle: "Visão consolidada da operação em tempo real." };
   const params = useMemo(() => buildParams(filters, scope), [filters, scope]);
@@ -101,6 +105,7 @@ export function OperacaoPage({ scope }) {
   }
 
   function refreshAll() {
+    setAutoRetryCount(0);
     summary.refetch();
     details.refetch();
     tasks.refetch();
@@ -127,6 +132,27 @@ export function OperacaoPage({ scope }) {
   // são ~1200 tarefas no dia). Melhor mostrar "—" do que uma contagem
   // minúscula que passa a impressão de erro.
   const isDetailsIncomplete = !anyError && Boolean(details.data?.dataIncomplete);
+  const autoRetrying = isDetailsIncomplete && autoRetryCount < MAX_AUTO_RETRIES;
+
+  // A Auvo às vezes não serve uma página pesada dentro do orçamento de uma
+  // única chamada (ver FETCH_DEADLINE_MS no backend, já no teto seguro
+  // antes do corte de 150s da própria plataforma — não dá pra "esperar
+  // mais" numa chamada só). O que ajuda de verdade é tentar de novo em
+  // chamadas separadas: instabilidade da Auvo costuma ser passageira, então
+  // 1-2 tentativas automáticas aqui resolvem a maioria dos casos sem o
+  // usuário precisar perceber ou clicar em nada.
+  useEffect(() => {
+    if (!isDetailsIncomplete || autoRetryCount >= MAX_AUTO_RETRIES) return undefined;
+    const timer = setTimeout(() => {
+      setAutoRetryCount((count) => count + 1);
+      details.refetch();
+    }, AUTO_RETRY_DELAY_MS);
+    return () => clearTimeout(timer);
+  }, [isDetailsIncomplete, autoRetryCount]);
+
+  useEffect(() => {
+    setAutoRetryCount(0);
+  }, [params]);
 
   return (
     <main className="main operacao-page">
@@ -180,15 +206,21 @@ export function OperacaoPage({ scope }) {
         </div>
       )}
 
-      {isDetailsIncomplete && (
-        <div className="state-warning-block">
-          <strong>A Auvo não respondeu a tempo para a maior parte das tarefas do período.</strong>
-          <p>
-            "Tarefas hoje" continua correto (vem de uma consulta separada, mais leve). Os KPIs de status e os
-            gráficos abaixo ficam ocultos em vez de mostrar uma contagem parcial que pareceria errada — as tabelas
-            de tipo/técnico/cliente mostram o que foi possível buscar. Clique em "Atualizar dados" para tentar de
-            novo.
-          </p>
+      {autoRetrying && (
+        <div className="state-warning-block" style={{ borderColor: "var(--accent)" }}>
+          <strong>Atualizando os detalhes do período…</strong>
+        </div>
+      )}
+
+      {isDetailsIncomplete && !autoRetrying && (
+        <div className="state-warning-block" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
+          <div>
+            <strong>Não foi possível carregar os detalhes completos deste período.</strong>
+            <p>Os números gerais acima continuam corretos.</p>
+          </div>
+          <button type="button" className="btn btn--primary" onClick={refreshAll}>
+            Tentar novamente
+          </button>
         </div>
       )}
 
