@@ -27,10 +27,16 @@ import requests
 
 AUVO_BASE_URL = "https://api.auvo.com.br/v2"
 AUVO_MAX_PAGE_SIZE = 100  # teto da própria Auvo — confirmado: 150 -> HTTP 400
-REQUEST_TIMEOUT_S = 25  # AUVO_REQUEST_TIMEOUT_MS do TS
+# O TS usa 25s (AUVO_REQUEST_TIMEOUT_MS) porque atende um request HTTP ao
+# vivo com prazo curto. Este pipeline roda em lote sem essa pressão de
+# tempo — confirmado ao vivo (teste real em 15/09/2026, run #34967188096)
+# que uma página de 100 tarefas pode legitimamente passar de 25s pra ser
+# gerada pela Auvo; usar o mesmo timeout aqui só desperdiçava as 3
+# tentativas em ~80s sem nenhuma responder. 60s dá mais folga real.
+REQUEST_TIMEOUT_S = 60
 CONCURRENCY_LIMIT = 8  # AUVO_CONCURRENCY_LIMIT do TS — testado, 16 já derruba a Auvo
 TOKEN_SAFETY_MARGIN = timedelta(minutes=2)
-MAX_ATTEMPTS = 3
+MAX_ATTEMPTS = 4
 RETRYABLE_STATUSES = {404, 429, 500, 502, 503, 504}
 
 BRAZIL_TZ = timezone(timedelta(hours=-3))  # fixo — Brasil não tem mais horário de verão desde 2019
@@ -111,7 +117,7 @@ class AuvoClient:
                 )
             except requests.RequestException as exc:
                 last_error = exc
-                time.sleep(min(1.5 * attempt, 8.0))
+                time.sleep(min(3 * attempt, 20.0))
                 continue
 
             if resp.status_code == 401:
@@ -128,7 +134,7 @@ class AuvoClient:
 
             if resp.status_code in RETRYABLE_STATUSES and attempt < MAX_ATTEMPTS:
                 last_error = AuvoError(f"HTTP {resp.status_code} da Auvo (tentativa {attempt}/{MAX_ATTEMPTS}).")
-                time.sleep(min(1.5 * attempt, 8.0))
+                time.sleep(min(3 * attempt, 20.0))
                 continue
 
             if not resp.ok:
@@ -175,3 +181,29 @@ class AuvoClient:
                 "mês não será gravado no data lake, rode de novo."
             )
         return all_items
+
+
+# Confirmado ao vivo (run #34967188096, 15/09/2026): a Auvo às vezes fica
+# lenta demais pra servir QUALQUER página pesada por alguns minutos —
+# nesse estado, tentar de novo na hora (dentro de list_tasks_page) não
+# ajuda porque o problema não é uma falha pontual de rede, é a API inteira
+# devagar. Um mês inteiro só deveria desistir depois de tentar de novo já
+# passado um tempo real, não só milissegundos depois.
+MONTH_RETRY_ATTEMPTS = 3
+MONTH_RETRY_PAUSE_S = 45
+
+
+def fetch_month_resilient(client: "AuvoClient", year: int, month: int) -> list[dict]:
+    last_error: Exception | None = None
+    for attempt in range(1, MONTH_RETRY_ATTEMPTS + 1):
+        try:
+            return client.fetch_month(year, month)
+        except Exception as exc:  # noqa: BLE001 — repassa a última se todas as tentativas falharem
+            last_error = exc
+            if attempt < MONTH_RETRY_ATTEMPTS:
+                print(
+                    f"[retry] {year:04d}-{month:02d}: tentativa {attempt}/{MONTH_RETRY_ATTEMPTS} falhou "
+                    f"({exc}) — aguardando {MONTH_RETRY_PAUSE_S}s antes de tentar o mês inteiro de novo."
+                )
+                time.sleep(MONTH_RETRY_PAUSE_S)
+    raise last_error  # type: ignore[misc]

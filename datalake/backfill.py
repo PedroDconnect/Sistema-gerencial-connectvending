@@ -16,7 +16,7 @@ import argparse
 import os
 import sys
 
-from auvo_client import AuvoClient
+from auvo_client import AuvoClient, fetch_month_resilient
 from b2_storage import build_client, month_key, object_exists, upload_month
 from months import current_month, format_month, month_sequence, parse_month
 
@@ -51,7 +51,7 @@ def main() -> int:
 
         print(f"[fetch] {label}...", flush=True)
         try:
-            tasks = auvo.fetch_month(year, month)
+            tasks = fetch_month_resilient(auvo, year, month)
             uploaded_key = upload_month(s3, bucket, year, month, tasks)
             print(f"[done]  {label}: {len(tasks)} tarefa(s) -> s3://{bucket}/{uploaded_key}")
         except Exception as exc:  # noqa: BLE001 — queremos seguir pros outros meses e reportar no final
