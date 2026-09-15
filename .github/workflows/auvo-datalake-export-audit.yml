@@ -1,0 +1,32 @@
+name: Auvo Data Lake - Exportar Auditoria
+
+on:
+  workflow_dispatch:
+    inputs:
+      months:
+        description: "Meses a exportar, separados por virgula (YYYY-MM)"
+        required: true
+        default: "2026-07,2026-08,2026-09"
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - run: pip install -r datalake/requirements.txt
+
+      - name: Exportar auditoria
+        working-directory: datalake
+        env:
+          B2_APPLICATION_KEY_ID: ${{ secrets.B2_APPLICATION_KEY_ID }}
+          B2_APPLICATION_KEY: ${{ secrets.B2_APPLICATION_KEY }}
+          B2_BUCKET_NAME: ${{ vars.B2_BUCKET_NAME }}
+          B2_REGION: ${{ vars.B2_REGION }}
+          INPUT_MONTHS: ${{ inputs.months }}
+        run: python export_audit.py --months "$INPUT_MONTHS"
